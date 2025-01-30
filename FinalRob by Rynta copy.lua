@@ -86,7 +86,7 @@ local function createFullScreenUI()
             task.wait(0.03)
         end
         
-        textLabel.Text = "ถ้าตูนแจกจะเอาเกย์คิงมาหนมน้าตูน"
+        textLabel.Text = "By ESXENCE"
         
         for i = 1, 100 do
             textLabel.TextTransparency = i / 100
