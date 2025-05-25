@@ -1,3 +1,6 @@
+-- RyntazHub :: Titan Edition (V3.0.1 - Syntax Fix)
+-- Script Architecture by Gemini-AI for Ryntaz. All rights reserved.
+
 local Player = game:GetService("Players").LocalPlayer
 local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
@@ -33,7 +36,7 @@ local RyntazHub = {
 
 --[[
 ====================================================================================================
-    THEME & UI CONFIGURATION (ส่วนนี้คุณสามารถแก้ไขค่าสีและ Font ได้)
+    THEME & UI CONFIGURATION
 ====================================================================================================
 ]]
 local THEME = {
@@ -56,7 +59,7 @@ local MasterConfig = {
     JewelryStore = {
         DisplayName = "ร้านเพชร",
         Identifiers = { Path = "Workspace.Heists.JewelryStore", HasDescendants = {"EssentialParts.JewelryBoxes", "EssentialParts.JewelryBoxes.JewelryManager"} },
-        EntryTeleport = CFrame.new(-82, 86, 807), -- (Optional)
+        EntryTeleport = CFrame.new(-82, 86, 807),
         Sequence = {
             {
                 Name = "เก็บเครื่องเพชร", Type = "IterateAndFireEvent",
@@ -64,23 +67,23 @@ local MasterConfig = {
                 ItemQuery = function(container) local items = {}; for _,c in ipairs(container:GetChildren()) do if c:IsA("Model") or c:IsA("BasePart") then table.insert(items, c) end end; return items end,
                 RemoteEventPath = "EssentialParts.JewelryBoxes.JewelryManager.Event",
                 EventArgsFunc = function(lootInstance) return {lootInstance} end,
-                FireCountPerItem = 2, TeleportOffset = Vector3.new(0, 2, 2), DelayBetweenItems = 0.15, DelayBetweenFires = 0.1,
+                FireCountPerItem = 2, TeleportOffset = Vector3.new(0, 3, 0), DelayBetweenItems = 0.2,
                 Progress = { Enabled = true, Label = "กำลังเก็บเพชร...", DurationPerItem = 0.3 }
             }
         }
     },
     Bank = {
-        DisplayName = "ธนาคาร",
-        Identifiers = { Path = "Workspace.Heists.Bank", HasDescendants = {"EssentialParts.VaultDoor"} },
+        DisplayName = "City Bank",
+        Identifiers = { Path = "Workspace.Heists.Bank", HasDescendants = {"VaultDoor", "Lasers"} },
         EntryTeleport = CFrame.new(730, 108, 560),
         Sequence = {
             {
-                Name = "เปิดประตูห้องมั่นคง", Type = "Touch", TargetPath = "EssentialParts.VaultDoor.Touch",
+                Name = "Touch Vault Door", Type = "Touch", TargetPath = "EssentialParts.VaultDoor.Touch",
                 TeleportOffset = Vector3.new(0, 0, -3), Cooldown = 2.5,
                 Progress = { Enabled = true, Label = "กำลังเปิดประตู...", Duration = 2.5 }
             },
             {
-                Name = "เก็บเงินสด", Type = "IterateAndFindInteract",
+                Name = "Collect Cash Stacks", Type = "IterateAndFindInteract",
                 ItemContainerPath = "Interior", ItemNameHint = "Cash",
                 InteractionHint = {Type="RemoteEvent", NameHint="Collect", Args=function(item) return {item} end},
                 TeleportOffset = Vector3.new(0,1.5,0), DelayBetweenItems = 0.2, FireCountPerItem = 1,
@@ -89,18 +92,18 @@ local MasterConfig = {
         }
     },
     Casino = {
-        DisplayName = "คาสิโน",
-        Identifiers = { Path = "Workspace.Heists.Casino", HasDescendants = {"Interior.HackComputer"} },
+        DisplayName = "Diamond Casino",
+        Identifiers = { Path = "Workspace.Heists.Casino", HasDescendants = {"HackComputer"} },
         EntryTeleport = CFrame.new(1690, 30, 525),
         Sequence = {
             {
-                Name = "แฮ็กคอมพิวเตอร์", Type = "ProximityPrompt", TargetPath = "Interior.HackComputer.HackComputer",
+                Name = "Hack Mainframe", Type = "ProximityPrompt", TargetPath = "Interior.HackComputer.HackComputer",
                 ProximityPromptActionHint = "Hack", HoldDuration = 3,
-                TeleportOffset = Vector3.new(0,0,-2), Cooldown = 1,
+                TeleportOffset = Vector3.new(0,0,-2.5), Cooldown = 1,
                 Progress = { Enabled = true, Label = "กำลังแฮ็ก...", Duration = 3 }
             },
             {
-                Name = "เก็บเงินจากห้องนิรภัย", Type = "IterateAndFindInteract",
+                Name = "Collect Vault Cash", Type = "IterateAndFindInteract",
                 ItemContainerPath = "Interior.Vault", ItemNameHint = "Cash",
                 InteractionHint = {Type="RemoteEvent", NameHint="Take|Collect", Args=function(item) return {item} end},
                 TeleportOffset = Vector3.new(0,1.5,0), DelayBetweenItems = 0.3, FireCountPerItem = 1,
@@ -121,50 +124,240 @@ function UILib.Tween(obj,props,overrideInfo)local info=TweenInfo.new(overrideInf
 function MainUI:CreateNotification(title,text,style,duration)local notifFrame=UILib.Create("Frame"){Name="Notification",Parent=MainUI.ScreenGui,Size=UDim2.new(0,280,0,65),Position=UDim2.new(0.98,0,1,-10),AnchorPoint=Vector2.new(1,1),BackgroundColor3=THEME.Colors.Primary,BorderSizePixel=0,ZIndex=9999,{UILib.Create("UICorner"){CornerRadius=UDim.new(0,6)},UILib.Create("UIPadding"){PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10),PaddingTop=UDim.new(0,5),PaddingBottom=UDim.new(0,5)},UILib.Create("Frame"){Name="ColorStripe",Size=UDim2.new(0,4,1,0),BackgroundColor3=THEME.Colors[style or"AccentBright"],BorderSizePixel=0,{UILib.Create("UICorner"){CornerRadius=UDim.new(0,6)}}},UILib.Create("TextLabel"){Name="Title",Size=UDim2.new(1,-15,0,20),Position=UDim2.new(0,10,0,0),BackgroundTransparency=1,Font=THEME.Font.Main,Text=title or"แจ้งเตือน",TextColor3=THEME.Colors[style or"AccentBright"],TextSize=15,TextXAlignment=Enum.TextXAlignment.Left},UILib.Create("TextLabel"){Name="Content",Size=UDim2.new(1,-15,0,35),Position=UDim2.new(0,10,0,20),BackgroundTransparency=1,Font=THEME.Font.UI,Text=text or"",TextColor3=THEME.Colors.Text,TextSize=13,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top}}};local currentNotifs=0;for _,v in ipairs(MainUI.ScreenGui:GetChildren())do if v.Name=="Notification"then currentNotifs=currentNotifs+1 end end;notifFrame.Position=UDim2.new(0.98,0,1,-10-(currentNotifs*75));UILib.Shadow(notifFrame);UILib.Tween(notifFrame,{Position=UDim2.new(0.98,-15,1,-10-(currentNotifs*75))},{Time=THEME.Animation.Slow,EasingStyle=Enum.EasingStyle.Elastic});task.delay(duration or 4,function()if not notifFrame or not notifFrame.Parent then return end;UILib.Tween(notifFrame,{Position=notifFrame.Position+UDim2.new(0,300,0,0),Transparency=1},{Time=THEME.Animation.Medium});task.wait(THEME.Animation.Medium);if notifFrame and notifFrame.Parent then notifFrame:Destroy()end end)end
 function MainUI:CreateProgressBar(parent,label)local c=UILib.Create("Frame"){Name="ProgressBarContainer",Parent=parent,Size=UDim2.new(1,0,0,22),BackgroundTransparency=1,ClipsDescendants=true,};local b=UILib.Create("Frame"){Name="ProgressBar",Parent=c,Size=UDim2.new(1,0,1,0),BackgroundColor3=THEME.Colors.Secondary,BorderSizePixel=0,{UILib.Create("UICorner"){CornerRadius=UDim.new(0,5)},UILib.Create("Frame"){Name="Fill",Size=UDim2.new(0,0,1,0),BackgroundColor3=THEME.Colors.ProgressBarFill,BorderSizePixel=0,{UILib.Create("UICorner"){CornerRadius=UDim.new(0,5)}}},UILib.Create("TextLabel"){Name="Label",Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Font=THEME.Font.Code,Text=label or"",TextColor3=THEME.Colors.Background,TextSize=12,TextStrokeTransparency=0.8}}};function b:Update(prog,txt)UILib.Tween(b.Fill,{Size=UDim2.new(math.clamp(prog,0,1),0,1,0)},{Time=THEME.Animation.Fast});if txt then b.Label.Text=txt end end;function b:Run(dur,txt)b.Label.Text=txt or"";b.Fill.Size=UDim2.new(0,0,1,0);UILib.Tween(b.Fill,{Size=UDim2.new(1,0,1,0)},{Time=dur,EasingStyle=Enum.EasingStyle.Linear})end;return b end
 function MainUI:CreateHeistCard(parent,heistData,robCallback)local card=UILib.Create("Frame"){Name="HeistCard",Parent=parent,Size=UDim2.new(1,0,0,60),BackgroundColor3=THEME.Colors.Primary,BorderSizePixel=0,ClipsDescendants=true,LayoutOrder=1,{UILib.Create("UICorner"){CornerRadius=UDim.new(0,6)},UILib.Create("UIPadding"){PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8),PaddingTop=UDim.new(0,5),PaddingBottom=UDim.new(0,5)}}};UILib.Shadow(card);local title=UILib.Create("TextLabel"){Name="Title",Parent=card,Size=UDim2.new(0.65,0,0,25),Position=UDim2.new(0,0,0,0),BackgroundTransparency=1,Font=THEME.Font.Main,Text=heistData.DisplayName,TextColor3=THEME.Colors.AccentBright,TextSize=16,TextXAlignment=Enum.TextXAlignment.Left};local status=UILib.Create("TextLabel"){Name="Status",Parent=card,Size=UDim2.new(0.65,0,0,18),Position=UDim2.new(0,0,0,25),BackgroundTransparency=1,Font=THEME.Font.Code,Text="สถานะ: พร้อม",TextColor3=THEME.Colors.Success,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left};local btn=createStyledButton(card,"เริ่มปล้น",UDim2.new(0.3,0,0.8,0),UDim2.new(0.7,0,0.1,0),THEME.Colors.Accent,THEME.Colors.Background,13);btn.Name=heistData.Key.."_RobButton";RyntazHub.UI[heistData.Key.."_StatusLabel"]=status;RyntazHub.UI[heistData.Key.."_RobButton"]=btn;btn.MouseButton1Click:Connect(function()if RyntazHub.State.IsRobbing then MainUI:CreateNotification("ข้อผิดพลาด","การปล้นอื่นกำลังทำงานอยู่!","Error");return end;robCallback(heistData.Key)end);return card end
-function MainUI:Build()if MainUI.ScreenGui and MainUI.ScreenGui.Parent then MainUI.ScreenGui:Destroy()end;MainUI.ScreenGui=UILib.Create("ScreenGui"){Name="RyntazHubTitanV3",Parent=Player:WaitForChild("PlayerGui"),ZIndexBehavior=Enum.ZIndexBehavior.Sibling,ResetOnSpawn=false,DisplayOrder=1001};introAnimationV2(MainUI.ScreenGui);task.wait(1.5);MainUI.Frame=UILib.Create("Frame"){Name="MainFrame",Parent=MainUI.ScreenGui,Size=originalMainFrameSize,Position=UDim2.new(0.5,0,1.5,0),AnchorPoint=Vector2.new(0.5,0.5),BackgroundColor3=THEME.COLORS.Background,BorderSizePixel=1,BorderColor3=THEME.COLORS.Accent,Draggable=true,Active=true,ClipsDescendants=true,{UILib.Create("UICorner"){CornerRadius=UDim.new(0,8)}}};UILib.Shadow(MainUI.Frame);local titleBar=UILib.Create("Frame"){Name="TitleBar",Parent=MainUI.Frame,Size=UDim2.new(1,0,0,35),BackgroundColor3=THEME.COLORS.Primary,BorderSizePixel=0,ZIndex=3,{UILib.Create("TextLabel"){Name="Title",Size=UDim2.new(1,-80,1,0),Position=UDim2.new(0.5,0,0.5,0),AnchorPoint=Vector2.new(0.5,0.5),BackgroundTransparency=1,Font=THEME.Font.Title,Text="RyntazHub :: TITAN OPS",TextColor3=THEME.COLORS.AccentBright,TextSize=18,TextXAlignment=Enum.TextXAlignment.Center}}};local btnS=UDim2.new(0,12,0,12);local btnY=0.5;local btnYO=-6;local cB=UILib.Create("ImageButton"){Parent=titleBar,Name="Close",Size=btnS,Position=UDim2.new(0,10,btnY,btnYO),Image="rbxassetid://13516625",ImageColor3=THEME.Colors.CloseButton,BackgroundTransparency=1,ZIndex=4};local mB=UILib.Create("ImageButton"){Parent=titleBar,Name="Minimize",Size=btnS,Position=UDim2.new(0,30,btnY,btnYO),Image="rbxassetid://13516625",ImageColor3=THEME.Colors.MinimizeButton,BackgroundTransparency=1,ZIndex=4};local mxB=UILib.Create("ImageButton"){Parent=titleBar,Name="Maximize",Size=btnS,Position=UDim2.new(0,50,btnY,btnYO),Image="rbxassetid://13516625",ImageColor3=THEME.Colors.MaximizeButton,BackgroundTransparency=1,ZIndex=4};local contentContainer=UILib.Create("Frame"){Name="ContentContainer",Parent=MainUI.Frame,Size=UDim2.new(1,0,1,-100),Position=UDim2.new(0,0,0,35),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=1,{UILib.Create("UIListLayout"){Padding=UDim.new(0,10),HorizontalAlignment=Enum.HorizontalAlignment.Center,SortOrder=Enum.SortOrder.LayoutOrder}}};MainUI.ContentContainer=contentContainer;statusBar=UILib.Create("Frame"){Name="StatusBar",Parent=MainUI.Frame,Size=UDim2.new(1,-10,0,25),Position=UDim2.new(0,5,1,-65),BackgroundColor3=THEME.Colors.Primary,BackgroundTransparency=0.3,ZIndex=2,{UILib.Create("UICorner"){CornerRadius=UDim.new(0,3)}}};statusTextLabel=UILib.Create("TextLabel"){Parent=statusBar,Name="StatusText",Size=UDim2.new(0.7,-5,1,0),Position=UDim2.new(0,5,0,0),BackgroundTransparency=1,Font=THEME.Font.Code,Text="สถานะ: กำลังเตรียม...",TextColor3=THEME.Colors.TextDim,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left};timerTextLabel=UILib.Create("TextLabel"){Parent=statusBar,Name="TimerText",Size=UDim2.new(0.3,-5,1,0),Position=UDim2.new(0.7,5,0,0),BackgroundTransparency=1,Font=THEME.Font.Code,Text="เวลา: 0.0วิ",TextColor3=THEME.Colors.TextDim,TextSize=12,TextXAlignment=Enum.TextXAlignment.Right};local bottomBar=UILib.Create("Frame"){Name="BottomBar",Parent=MainUI.Frame,Size=UDim2.new(1,0,0,35),Position=UDim2.new(0,0,1,-35),BackgroundColor3=THEME.Colors.Primary,ZIndex=2};local startAllBtn=createStyledButton(bottomBar,"ปล้นทั้งหมด",UDim2.new(0.45,-10,0.8,0),UDim2.new(0.025,0,0.1,0),THEME.Colors.Accent,THEME.Colors.Background);local stopBtn=createStyledButton(bottomBar,"หยุดปล้น",UDim2.new(0.45,-10,0.8,0),UDim2.new(0.525,0,0.1,0),THEME.Colors.Error,THEME.Colors.Text);local dragging=false;local dI,dS,sPF;titleBar.InputBegan:Connect(function(i)if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=true;dS=i.Position;sPF=MainUI.Frame.Position;i.Changed:Connect(function()if i.UserInputState==Enum.UserInputState.End then dragging=false end end)end end);UserInputService.InputChanged:Connect(function(i)if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then if dragging and dS then local d=i.Position-dS;MainUI.Frame.Position=UDim2.new(sPF.X.Scale,sPF.X.Offset+d.X,sPF.Y.Scale,sPF.Y.Offset+d.Y)end end end);cB.MouseButton1Click:Connect(function()local ct=UILib.Tween(MainUI.Frame,{Size=UDim2.fromScale(0.01,0.01),Position=UDim2.new(0.5,0,0.5,0),Transparency=1},{Time=0.2,EasingStyle=Enum.EasingStyle.Quad,EasingDirection=Enum.EasingDirection.In});ct.Completed:Wait();MainUI.ScreenGui:Destroy();MainUI.ScreenGui=nil;mainFrame=nil;if currentRobberyCoroutine then task.cancel(currentRobberyCoroutine);currentRobberyCoroutine=nil end end);local isCV=INITIAL_UI_VISIBLE;local function tCV()isCV=not isCV;contentContainer.Visible=isCV;bottomBar.Visible=isCV;statusBar.Visible=isCV;local tS;if isCV then tS=originalMainFrameSize;mxB.ImageColor3=THEME.Colors.MaximizeButton;mB.ImageColor3=THEME.Colors.MinimizeButton else tS=UDim2.new(originalMainFrameSize.X.Scale,originalMainFrameSize.X.Offset,0,titleBar.AbsoluteSize.Y);mxB.ImageColor3=THEME.Colors.Accent;mB.ImageColor3=THEME.Colors.Accent end;UILib.Tween(MainUI.Frame,{Size=tS},{Time=0.2})end;mB.MouseButton1Click:Connect(tCV);mxB.MouseButton1Click:Connect(tCV);startAllBtn.MouseButton1Click:Connect(function()if RyntazHub.State.IsRobbing then MainUI:CreateNotification("ไม่ว่าง","การปล้นอื่นกำลังทำงานอยู่!","Warning");return end;RyntazHub.State.IsRobbing=true;currentRobberyCoroutine=task.spawn(RyntazHub.ExecutionEngine.RunAllSequences)end);stopBtn.MouseButton1Click:Connect(function()if currentRobberyCoroutine then task.cancel(currentRobberyCoroutine);currentRobberyCoroutine=nil;RyntazHub.State.IsRobbing=false;RyntazHub.State.CurrentHeist=nil;RyntazHub.State.CurrentAction=nil;MainUI:CreateNotification("หยุดแล้ว","การปล้นถูกสั่งหยุด","Warning");updateStatus("หยุดโดยผู้ใช้.",0)else MainUI:CreateNotification("สถานะ","ไม่มีการปล้นที่กำลังทำงาน","Info")end end);originalMainFramePosition=UDim2.new(0.5,0,0.5,0);UILib.Tween(MainUI.Frame,{Visible=true,Size=originalMainFrameSize,Position=originalMainFramePosition},{Time=THEME.Animation.Slow,EasingStyle=Enum.EasingStyle.Elastic});if not INITIAL_UI_VISIBLE then task.wait(THEME.Animation.Slow);tCV()end;MainUI:CreateNotification("RyntazHub Titan", "เริ่มต้นการทำงานแล้ว!", "Success", 3)end
 
-RyntazHub.Scanner={FindInstanceFromPath=function(path)local current=game;for component in path:gmatch("([^%.]+)")do current=current:FindFirstChild(component);if not current then return nil end end;return current end,ScanHeist=function(heistName,heistConfig)if not Character then MainUI:CreateNotification("ข้อผิดพลาด Scanner","Character ไม่พร้อมใช้งาน","Error");return end;local heistFolder=RyntazHub.Scanner.FindInstanceFromPath(heistConfig.Identifiers.Path);if not heistFolder then MainUI:CreateNotification("Scan Error","ไม่พบ Heist Folder: "..heistName,"Error");RyntazHub.Data.Analyzed[heistName]=nil;return end;RyntazHub.Data.Analyzed[heistName]={Key=heistName,DisplayName=heistConfig.DisplayName,Root=heistFolder,AnalyzedSequence={},Config=heistConfig,EntryTeleport=heistConfig.EntryTeleport};local sequencePossible=true;for i,stepConfig in ipairs(heistConfig.Sequence)do local analyzedStep={Name=stepConfig.Name,Type=stepConfig.Type,Config=stepConfig,TargetInstance=nil,RemoteEventInstance=nil,ProximityPromptInstance=nil};if stepConfig.TargetPath then analyzedStep.TargetInstance=heistFolder:FindFirstChild(stepConfig.TargetPath,true)end;if stepConfig.Type=="IterateAndFireEvent"or stepConfig.Type=="IterateAndTriggerPrompt"then if stepConfig.ItemContainerPath then local container=heistFolder:FindFirstChild(stepConfig.ItemContainerPath,true);if container then analyzedStep.TargetInstance=container else MainUI:CreateNotification("Config Error",heistName.." - Step "..i..": ไม่พบ ItemContainerPath: "..stepConfig.ItemContainerPath,"Error");sequencePossible=false;break end else MainUI:CreateNotification("Config Error",heistName.." - Step "..i..": ไม่ได้ระบุ ItemContainerPath สำหรับ Iterate","Error");sequencePossible=false;break end end;if stepConfig.Type=="RemoteEvent"or stepConfig.Type=="IterateAndFireEvent"then if stepConfig.RemoteEventPath then local eventPathBase=analyzedStep.TargetInstance or heistFolder;analyzedStep.RemoteEventInstance=RyntazHub.Scanner.FindInstanceFromPath(stepConfig.RemoteEventPath)or eventPathBase:FindFirstChild(stepConfig.RemoteEventPath,true)elseif stepConfig.RemoteEventHint then local searchBase=analyzedStep.TargetInstance or heistFolder;analyzedStep.RemoteEventInstance=findRemote(searchBase,stepConfig.RemoteEventHint)or findRemote(searchBase.Parent,stepConfig.RemoteEventHint)end;if not(analyzedStep.RemoteEventInstance and analyzedStep.RemoteEventInstance:IsA("RemoteEvent"))then MainUI:CreateNotification("Config Error",heistName.." - Step "..i..": ไม่พบ RemoteEvent ("..(stepConfig.RemoteEventPath or stepConfig.RemoteEventHint or"N/A")..")","Error");sequencePossible=false;break end end;if stepConfig.Type=="ProximityPrompt"or stepConfig.Type=="IterateAndTriggerPrompt"then local searchBaseForPrompt=analyzedStep.TargetInstance or(stepConfig.TargetPath and heistFolder:FindFirstChild(stepConfig.TargetPath,true))or heistFolder;if searchBaseForPrompt then analyzedStep.ProximityPromptInstance=findPrompt(searchBaseForPrompt,stepConfig.ProximityPromptActionHint)if not analyzedStep.ProximityPromptInstance then MainUI:CreateNotification("Config Error",heistName.." - Step "..i..": ไม่พบ ProximityPrompt (Hint: ".. (stepConfig.ProximityPromptActionHint or "N/A")..") ใน "..searchBaseForPrompt:GetFullName(),"Error");sequencePossible=false;break end else MainUI:CreateNotification("Config Error",heistName.." - Step "..i..": ไม่สามารถหา TargetPath สำหรับ ProximityPrompt ได้","Error");sequencePossible=false;break end end;if not analyzedStep.TargetInstance and(stepConfig.Type=="Touch"or stepConfig.Type=="ProximityPrompt"or((stepConfig.Type=="IterateAndFireEvent"or stepConfig.Type=="IterateAndTriggerPrompt")and not analyzedStep.TargetInstance))then MainUI:CreateNotification("Config Error",heistName.." - Step "..i..": ไม่พบ TargetPath/ItemContainerPath หรือ TargetPath ไม่ถูกต้อง","Error");sequencePossible=false;break end;table.insert(RyntazHub.Data.Analyzed[heistName].AnalyzedSequence,analyzedStep)end;if not sequencePossible then RyntazHub.Data.Analyzed[heistName]=nil;MainUI:CreateNotification("Heist Incomplete",heistName.." ไม่สามารถดำเนินการได้เนื่องจาก Config ไม่สมบูรณ์","Warning")else MainUI:CreateNotification("Heist Ready",heistName.." พร้อมสำหรับการปล้นแล้ว","Success",2)end end}}
-RyntazHub.UIController={PopulateHeists=function()local heistsPage=MainUI.ContentContainer;for _,child in ipairs(heistsPage:GetChildren())do if child.Name=="HeistCard"then child:Destroy()end end;local count=0;for key,heistData in pairs(RyntazHub.Data.Analyzed)do if heistData then MainUI:CreateHeistCard(heistsPage,heistData,RyntazHub.ExecutionEngine.Run);count=count+1 end end;if count==0 then UILib.Create("TextLabel"){Parent=heistsPage,Text="ไม่พบ Heist ที่สามารถดำเนินการได้ โปรดตรวจสอบ Config หรือการสแกน",Font=THEME.Font.UI,TextSize=14,TextColor3=THEME.Colors.Warning,Size=UDim2.new(1,-20,0,50),BackgroundTransparency=1,TextWrapped=true}end end}
-RyntazHub.ExecutionEngine={Run=function(heistKey)if RyntazHub.State.IsRobbing then MainUI:CreateNotification("ไม่ว่าง","การปล้นอื่นกำลังทำงานอยู่!","Warning",2);return end;local heistData=RyntazHub.Data.Analyzed[heistKey];if not heistData then MainUI:CreateNotification("ข้อผิดพลาด","ไม่พบข้อมูลสำหรับ Heist: "..heistKey,"Error");return end;RyntazHub.State.IsRobbing=true;RyntazHub.State.CurrentHeist=heistKey;MainUI:CreateNotification("เริ่มปล้น",heistData.DisplayName.." กำลังเริ่ม...","AccentBright",3);local statusLabel=RyntazHub.UI[heistKey.."_StatusLabel"];local robButton=RyntazHub.UI[heistKey.."_RobButton"];if statusLabel then statusLabel.Text="สถานะ: กำลังปล้น...";statusLabel.TextColor3=THEME.Colors.Warning end;if robButton then robButton.Text="กำลังปล้น";robButton.Enabled=false end;currentRobberyCoroutine=task.spawn(function()local overallSuccess=true;if heistData.EntryTeleport and RootPart then updateStatus("กำลังเทเลพอร์ตไป "..heistData.DisplayName.."...");local s,e=pcall(function()RootPart.CFrame=heistData.EntryTeleport end);if not s then MainUI:CreateNotification("TP Error","เทเลพอร์ตไป "..heistData.DisplayName.." ล้มเหลว: "..tostring(e),"Error");overallSuccess=false end;task.wait(0.3)end;if overallSuccess then for stepIdx,stepData in ipairs(heistData.AnalyzedSequence)do if not RyntazHub.State.IsRobbing then MainUI:CreateNotification("หยุดแล้ว","การปล้น "..heistData.DisplayName.." ถูกหยุด","Warning");overallSuccess=false;break end;RyntazHub.State.CurrentAction=stepData.Name;updateStatus(string.format("Heist: %s - ขั้นตอน: %s",heistData.DisplayName,stepData.Name));local stepConfig=stepData.Config;local actionSuccess=false;if stepData.Type=="Touch"and stepData.TargetInstance then RootPart.CFrame=stepData.TargetInstance.CFrame+(stepConfig.TeleportOffset or Vector3.new(0,0,-2.5));task.wait(0.1);if typeof(firetouchinterest)=="function"then pcall(function()firetouchinterest(stepData.TargetInstance,RootPart,0);task.wait(0.05);firetouchinterest(stepData.TargetInstance,RootPart,1)end);actionSuccess=true else MainUI:CreateNotification("แจ้งเตือน","Executor ไม่มี firetouchinterest","Warning")end elseif stepData.Type=="ProximityPrompt"and stepData.ProximityPromptInstance then RootPart.CFrame=(stepData.TargetInstance.CFrame+(stepConfig.TeleportOffset or Vector3.new(0,0,-2)));task.wait(0.1);if typeof(fireproximityprompt)=="function"then MainUI:CreateNotification("Prompt",string.format("กำลังกด %s (%.1fs)",stepData.ProximityPromptInstance.ActionText,stepConfig.HoldDuration or 0),"Info",stepConfig.HoldDuration);pcall(fireproximityprompt,stepData.ProximityPromptInstance,stepConfig.HoldDuration or 0);actionSuccess=true else MainUI:CreateNotification("แจ้งเตือน","Executor ไม่มี fireproximityprompt","Warning")end elseif(stepData.Type=="RemoteEvent"or stepData.Type=="IterateAndFireEvent")and stepData.RemoteEventInstance then local itemsToTarget={stepData.TargetInstance};if stepData.Type=="IterateAndFireEvent"then if stepData.TargetInstance and stepConfig.ItemQuery then itemsToTarget=stepConfig.ItemQuery(stepData.TargetInstance)else MainUI:CreateNotification("Config Error",heistData.DisplayName.." - "..stepData.Name..": ItemContainer หรือ ItemQuery ไม่ถูกต้อง","Error");overallSuccess=false;break end end;local itemCount=#itemsToTarget;local itemProgressBar;if stepConfig.Progress and stepConfig.Progress.Enabled and itemCount > 1 then itemProgressBar = MainUI:CreateProgressBar(RyntazHub.UIHooks.HeistsPage, ""); itemProgressBar.LayoutOrder = 0; itemProgressBar.Parent.CanvasSize = UDim2.new(0,0,itemProgressBar.Parent.CanvasSize.Y.Offset + 25) end;for itemIdx,item in ipairs(itemsToTarget)do if not RyntazHub.State.IsRobbing then overallSuccess=false;break end;if itemProgressBar then itemProgressBar:Update(itemIdx/itemCount,string.format("%s (%d/%d)",stepData.Name,itemIdx,itemCount))end;if item:IsA("BasePart")or item:IsA("Model")then RootPart.CFrame=(item:IsA("Model")and item:GetPivot()or item.CFrame)+(stepConfig.TeleportOffset or Vector3.new(0,1.5,0));task.wait(stepConfig.DelayBetweenItems or 0.1)end;local args=stepConfig.EventArgsFunc and stepConfig.EventArgsFunc(item)or{};for f=1,stepConfig.FireCountPerItem or 1 do if not RyntazHub.State.IsRobbing then overallSuccess=false;break end;local s,e=pcall(function()stepData.RemoteEventInstance:FireServer(unpack(args))end);if not s then MainUI:CreateNotification("RE Error",string.format("Error firing %s for %s: %s",stepData.RemoteEventInstance.Name,item.Name,tostring(e)),"Error")end;if(stepConfig.FireCountPerItem or 1)>1 then task.wait(stepConfig.DelayBetweenFires or 0.05)end end;if not RyntazHub.State.IsRobbing then overallSuccess=false;break end end;if itemProgressBar and itemProgressBar.Parent then itemProgressBar.Parent.CanvasSize = UDim2.new(0,0,itemProgressBar.Parent.CanvasSize.Y.Offset - 25); itemProgressBar:Destroy() end;actionSuccess=true end;if not actionSuccess and stepConfig.Type ~= "Touch" and stepConfig.Type ~= "ProximityPrompt" then MainUI:CreateNotification("Action Failed", heistData.DisplayName .. " - " .. stepData.Name .. " ล้มเหลว","Error"); overallSuccess=false; break end;if stepConfig.Cooldown then updateStatus(string.format("Heist: %s - รอ Cooldown %.1fs...", heistData.DisplayName, stepConfig.Cooldown)); task.wait(stepConfig.Cooldown) end;if not overallSuccess then break end end end;if overallSuccess then MainUI:CreateNotification("สำเร็จ!",heistData.DisplayName.." ปล้นสำเร็จ!","Success")else MainUI:CreateNotification("ล้มเหลว/หยุด",heistData.DisplayName.." ปล้นไม่สำเร็จหรือถูกหยุด","Error")end;if statusLabel then statusLabel.Text="สถานะ: ว่าง";statusLabel.TextColor3=THEME.Colors.TextDim end;if robButton then robButton.Text="เริ่มปล้น";robButton.Enabled=true end;RyntazHub.State.IsRobbing=false;RyntazHub.State.CurrentHeist=nil;RyntazHub.State.CurrentAction=nil;currentRobberyCoroutine=nil end)end,RunAllSequences=function()startTime=tick();updateStatus("กำลังเตรียมข้อมูล Heists...",0);local allHeistsPrepared=true;for i,heistName in ipairs(TARGET_HEISTS_TO_ROB)do local config=MasterConfig[heistName];if config then RyntazHub.Scanner.ScanHeist(heistName,config)else MainUI:CreateNotification("Config Error","ไม่พบ MasterConfig สำหรับ: "..heistName,"Error");allHeistsPrepared=false end;updateStatus("เตรียม "..heistName.." เสร็จสิ้น",(i/#TARGET_HEISTS_TO_ROB)*100);if i<#TARGET_HEISTS_TO_ROB then task.wait(0.1)end end;if not allHeistsPrepared then MainUI:CreateNotification("ข้อผิดพลาด","การเตรียมข้อมูลบาง Heist ล้มเหลว","Error");RyntazHub.State.IsRobbing=false;currentRobberyCoroutine=nil;return end;MainUI.UIController.PopulateHeists();updateStatus("เริ่มลำดับการปล้นทั้งหมด...",0);local totalHeistsToRob=#TARGET_HEISTS_TO_ROB;for i,heistName in ipairs(TARGET_HEISTS_TO_ROB)do if not currentRobberyCoroutine then break end;if RyntazHub.Data.Analyzed[heistName]then RyntazHub.ExecutionEngine.Run(heistName);local timeout=0;while RyntazHub.State.IsRobbing and timeout<300 do task.wait(0.1);timeout=timeout+0.1 end;if RyntazHub.State.IsRobbing then task.cancel(currentRobberyCoroutine);currentRobberyCoroutine=nil;RyntazHub.State.IsRobbing=false;MainUI:CreateNotification("Timeout",heistName.." ใช้เวลานานเกินไป, ถูกหยุด.","Warning")end else MainUI:CreateNotification("ข้าม",heistName.." ไม่ได้ถูกเตรียมไว้","Info")end;updateStatus("เสร็จสิ้น "..heistName,(i/totalHeistsToRob)*100);if i<totalHeistsToRob and currentRobberyCoroutine then task.wait(1)end end;updateStatus("ปล้นทั้งหมดเสร็จสิ้น.",100);MainUI:CreateNotification("เสร็จสิ้น","การปล้นตามลำดับทั้งหมดเสร็จสิ้น","Success");RyntazHub.State.IsRobbing=false;currentRobberyCoroutine=nil end}
+function MainUI:Build()
+    if MainUI.ScreenGui and MainUI.ScreenGui.Parent then MainUI.ScreenGui:Destroy() end
 
-local function initialScan()
+    MainUI.ScreenGui = UILib.Create("ScreenGui"){
+        Name = "RyntazHubTitanV3_1",
+        Parent = Player:WaitForChild("PlayerGui"),
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        ResetOnSpawn = false,
+        DisplayOrder = 1001 
+    }
+
+    local introFrame = UILib.Create("Frame"){ Parent = MainUI.ScreenGui, Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1, ZIndex = 9999 }
+    local introText = UILib.Create("TextLabel"){ Parent = introFrame, Size = UDim2.new(0,0,0,0), Position = UDim2.new(0.5,0,0.5,0), AnchorPoint = Vector2.new(0.5,0.5), Font = THEME.Font.Main, Text = "Ryntaz Hub", TextColor3 = THEME.Colors.Accent, TextSize = 1, BackgroundTransparency = 1, Transparency = 1, Rotation = -10 }
+    UILib.Tween(introText, { Size = UDim2.new(0.8,0,0.2,0), TextSize = 80, Transparency = 0, Rotation = 0 }, { Time = THEME.Animation.Intro, EasingStyle = Enum.EasingStyle.Elastic, EasingDirection = Enum.EasingDirection.Out })
+    task.wait(THEME.Animation.Intro + 0.7) 
+    UILib.Tween(introText, { Transparency = 1, Position = UDim2.new(0.5,0,0.6,0) }, { Time = THEME.Animation.Medium })
+    task.wait(THEME.Animation.Medium)
+    introFrame:Destroy()
+
+    MainUI.Frame = UILib.Create("Frame"){
+        Name = "MainFrame", Parent = MainUI.ScreenGui,
+        Size = UDim2.new(0.4, 0, 0.5, 0), Position = UDim2.new(0.5, 0, 1.5, 0), 
+        AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = THEME.Colors.Background,
+        BorderSizePixel = 0, Draggable = true, Active = true, ClipsDescendants = true,
+        { UILib.Create("UICorner"){ CornerRadius = UDim.new(0, 8) } }
+    }
+    UILib.Shadow(MainUI.Frame)
+
+    titleBar = UILib.Create("Frame"){
+        Name = "TitleBar", Parent = MainUI.Frame, Size = UDim2.new(1, 0, 0, 40),
+        BackgroundColor3 = THEME.Colors.Primary, BorderSizePixel = 0, ZIndex = 3
+    }
+    local titleText = UILib.Create("TextLabel"){
+        Parent = titleBar, Name = "Title", Size = UDim2.new(1, -80, 1, 0), 
+        Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5,0.5),
+        BackgroundTransparency = 1, Font = THEME.Font.Title, Text = "RYNTAZHUB :: TITAN",
+        TextColor3 = THEME.Colors.AccentBright, TextSize = 18, TextXAlignment = Enum.TextXAlignment.Center
+    }
+    
+    local tabsContainer = UILib.Create("Frame"){
+        Name = "TabsContainer", Parent = MainUI.Frame, Size = UDim2.new(0, 130, 1, -40),
+        Position = UDim2.new(0, 0, 0, 40), BackgroundColor3 = THEME.Colors.Primary, BorderSizePixel = 0,
+        { UILib.Create("UIListLayout"){ Padding = UDim.new(0,0), FillDirection = Enum.FillDirection.Vertical, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Top } }
+    }
+    
+    local contentContainer = UILib.Create("Frame"){
+        Name = "ContentContainer", Parent = MainUI.Frame, Size = UDim2.new(1, -130, 1, -40 - 35), -- -35 for status bar
+        Position = UDim2.new(0, 130, 0, 40), BackgroundColor3 = THEME.Colors.Background, ClipsDescendants = true, ZIndex = 1,
+         { UILib.Create("UIPadding"){ PaddingTop = UDim.new(0,5), PaddingBottom = UDim.new(0,5), PaddingLeft = UDim.new(0,5), PaddingRight = UDim.new(0,5) } }
+    }
+    MainUI.ContentContainer = contentContainer
+
+    MainUI.Pages = {}; MainUI.Tabs = {}
+    local function createTab(name, iconId)
+        local page = UILib.Create("ScrollingFrame"){
+            Name = name, Parent = contentContainer, Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1,
+            BorderSizePixel = 0, Visible = false, ScrollingDirection = Enum.ScrollingDirection.Y,
+            ScrollBarImageColor3 = THEME.Colors.Accent, ScrollBarThickness = 5, ClipsDescendants = true,
+            { UILib.Create("UIListLayout"){ Padding = UDim.new(0,8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center} }
+        }
+        MainUI.Pages[name] = page
+        local tabButton = UILib.Create("TextButton"){
+            Name = name.."TabButton", Parent = tabsContainer, Size = UDim2.new(1,0,0,45), BackgroundColor3 = THEME.Colors.Primary,
+            Font = THEME.Font.UI, Text = " "..(iconId and "  " or "")..name, TextColor3 = THEME.Colors.TextDim, TextSize = 15, AutoButtonColor = false,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            { UILib.Create("Frame"){ Name="Indicator", Size=UDim2.new(0,3,0.7,0), Position=UDim2.new(0,5,0.15,0), BackgroundColor3=THEME.Colors.Accent, BorderSizePixel=0,Visible=false, {UILib.Create("UICorner"){CornerRadius=UDim.new(0,3)}} } }
+        }
+        if iconId then 
+            UILib.Create("ImageLabel"){Parent=tabButton, Size=UDim2.new(0,18,0,18),Position=UDim2.new(0,10,0.5,-9),BackgroundTransparency=1,Image=iconId,ImageColor3=THEME.Colors.TextDim, Name="Icon"}
+            tabButton.TextXAlignment = Enum.TextXAlignment.Left
+            tabButton.TextOffset = Vector2.new(25,0) -- Offset text if icon exists
+        end
+        MainUI.Tabs[name] = tabButton
+        tabButton.MouseButton1Click:Connect(function()
+            for tName,tBtn in pairs(MainUI.Tabs)do
+                local isCurrentTab = (tName==name)
+                MainUI.Pages[tName].Visible = isCurrentTab
+                tBtn.Indicator.Visible = isCurrentTab
+                UILib.Tween(tBtn,{BackgroundColor3 = isCurrentTab and THEME.Colors.Secondary or THEME.Colors.Primary, TextColor3 = isCurrentTab and THEME.Colors.Text or THEME.Colors.TextDim})
+                if tBtn:FindFirstChild("Icon") then UILib.Tween(tBtn.Icon,{ImageColor3 = isCurrentTab and THEME.Colors.Text or THEME.Colors.TextDim}) end
+            end
+        end)
+    end
+    
+    createTab("Heists", "rbxassetid://5147488592") -- Waypoint Icon
+    createTab("Scanner", "rbxassetid://1204397029") -- Settings Icon
+    createTab("Settings", "rbxassetid://4911962991") -- Palette Icon
+
+    if MainUI.Tabs["Heists"] then MainUI.Tabs["Heists"].MouseButton1Click:__call() end -- Activate first tab
+
+    local bottomControls = UILib.Create("Frame"){ Name="BottomControls", Parent = MainUI.Frame, Size = UDim2.new(1,-130,0,35), Position = UDim2.new(0,130,1,-35), BackgroundColor3 = THEME.Colors.Primary, ZIndex = 2 }
+    statusBar = UILib.Create("Frame"){Name="StatusBar",Parent=bottomControls,Size=UDim2.new(1,-10,1,-10),Position=UDim2.new(0,5,0,5),BackgroundColor3=THEME.Colors.Secondary,BackgroundTransparency=0.3,ZIndex=2,{UILib.Create("UICorner"){CornerRadius=UDim.new(0,3)}}};
+    statusTextLabel=UILib.Create("TextLabel"){Parent=statusBar,Name="StatusText",Size=UDim2.new(0.7,-5,1,0),Position=UDim2.new(0,5,0,0),BackgroundTransparency=1,Font=THEME.Font.Code,Text="สถานะ: กำลังเตรียม...",TextColor3=THEME.Colors.TextDim,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left};
+    timerTextLabel=UILib.Create("TextLabel"){Parent=statusBar,Name="TimerText",Size=UDim2.new(0.3,-5,1,0),Position=UDim2.new(0.7,5,0,0),BackgroundTransparency=1,Font=THEME.Font.Code,Text="เวลา: 0.0วิ",TextColor3=THEME.Colors.TextDim,TextSize=12,TextXAlignment=Enum.TextXAlignment.Right};
+
+    UILib.Tween(MainUI.Frame, {Visible = true, Position = UDim2.new(0.5,0,0.5,0) }, {Time=THEME.Animation.Slow, EasingStyle=Enum.EasingStyle.Elastic})
+    if not INITIAL_UI_VISIBLE then task.wait(THEME.Animation.Slow); MainUI.Tabs["Heists"].MouseButton1Click:__call(); task.wait(0.1); MainUI.Frame.Visible = false; end -- Start hidden if configured
+    
+    RyntazHub.UIHooks = {ProgressBar = nil, HeistsPage = MainUI.Pages["Heists"], ScannerPage = MainUI.Pages["Scanner"], SettingsPage = MainUI.Pages["Settings"]}
+    MainUI:PopulateScannerTab()
+end
+
+function MainUI:PopulateScannerTab()
+    local page = RyntazHub.UIHooks.ScannerPage
+    for _,c in ipairs(page:GetChildren()) do if c.Name ~= "UIListLayout" and c.Name ~= "UIPadding" then c:Destroy() end end
+
+    UILib.Create("TextLabel"){Parent=page, Text="ส่วนการสแกน (Focused Scan)", Font=THEME.Font.Main, TextSize=18, TextColor3=THEME.Colors.AccentBright, Size=UDim2.new(1,0,0,25), BackgroundTransparency=1, LayoutOrder=1}
+    local rescanButton = createStyledButton(page, "เริ่มสแกน Heists & ReplicatedStorage", UDim2.new(0.9,0,0,40),UDim2.new(), THEME.Colors.Secondary, THEME.Colors.Text)
+    rescanButton.LayoutOrder = 2
+    rescanButton.MouseButton1Click:Connect(function()
+        if RyntazHub.State.IsScanning then MainUI:CreateNotification("Scanner", "กำลังสแกนอยู่แล้ว", "Warning"); return end
+        RyntazHub.State.IsScanning = true
+        rescanButton.Text = "กำลังสแกน..."
+        rescanButton.Enabled = false
+        task.spawn(executeFocusedScanSequence) -- This now is scan only
+        task.spawn(function() -- Wait for scan to finish to re-enable button
+            repeat task.wait(0.5) until not RyntazHub.State.IsScanning
+            rescanButton.Text = "เริ่มสแกน Heists & ReplicatedStorage"
+            rescanButton.Enabled = true
+        end)
+    end)
+    
+    local outputLogContainer = UILib.Create("ScrollingFrame"){
+        Name = "ScanLogOutput", Parent = page, Size = UDim2.new(1,0,0.8,0), BackgroundColor3 = THEME.Colors.Primary,
+        BorderColor3 = THEME.Colors.Secondary, BorderSizePixel = 1, CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 5, ScrollBarImageColor3 = THEME.Colors.Accent,
+        LayoutOrder = 3, ClipsDescendants = true,
+        { UILib.Create("UIListLayout"){Padding = UDim.new(0,2), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Left} }
+    }
+    RyntazHub.UIHooks.ScanLogOutput = outputLogContainer 
+end
+
+RyntazHub.Scanner.FocusedScan = function()
     startTime = tick()
-    logOutputWrapper("System", "RyntazHub Titan V3.0 Initializing & Scanning...")
+    if RyntazHub.UIHooks.ScanLogOutput then for _,c in ipairs(RyntazHub.UIHooks.ScanLogOutput:GetChildren())do if c.Name=="LogEntry"or c.Name=="CategoryHeader" then c:Destroy()end end; RyntazHub.UIHooks.ScanLogOutput.CanvasSize=UDim2.new(0,0,0,0) end
+    allLoggedMessages={} -- Reset for Copy All
+
+    logOutputWrapper("System", "RyntazHub Explorer V3.0 :: Focused Scan Initialized")
     local pathsToScanConfig = {}
     local heistsFolder = Workspace:FindFirstChild(HEISTS_BASE_PATH_STRING)
     if heistsFolder then
+        logOutputWrapper("Info", "พบ Folder Heists หลัก: " .. heistsFolder:GetFullName())
         if #TARGET_HEISTS_IN_WORKSPACE > 0 then
             for _, heistName in ipairs(TARGET_HEISTS_IN_WORKSPACE) do
                 local specificHeistFolder = heistsFolder:FindFirstChild(heistName)
-                if specificHeistFolder then table.insert(pathsToScanConfig, {instance = specificHeistFolder, name = specificHeistFolder:GetFullName(), isHeist = true, heistNameForConfig = heistName})
+                if specificHeistFolder then table.insert(pathsToScanConfig, {instance = specificHeistFolder, name = heistName, type="Heist"})
                 else logOutputWrapper("Error", "ไม่พบ Folder Heist: " .. heistName) end
             end
         else
-            for _, childHeist in ipairs(heistsFolder:GetChildren()) do if childHeist:IsA("Instance") then table.insert(pathsToScanConfig, {instance = childHeist, name = childHeist:GetFullName(), isHeist = true, heistNameForConfig = childHeist.Name}) end end
+            for _, childHeist in ipairs(heistsFolder:GetChildren()) do if childHeist:IsA("Instance") then table.insert(pathsToScanConfig, {instance = childHeist, name = childHeist.Name, type="Heist"}) end end
         end
-    else logOutputWrapper("Error", "ไม่พบ Folder Heists หลัก: '" .. HEISTS_BASE_PATH_STRING .. "' ใน Workspace.") end
-    if ReplicatedStorage then table.insert(pathsToScanConfig, {instance = ReplicatedStorage, name = "ReplicatedStorage"}) end
+    else logOutputWrapper("Error", "ไม่พบ Folder Heists หลัก: '" .. HEISTS_BASE_PATH_STRING .. "'") end
+    if ReplicatedStorage then table.insert(pathsToScanConfig, {instance = ReplicatedStorage, name = "ReplicatedStorage", type="Service"}) end
     
     local totalScanTasks = #pathsToScanConfig
-    if totalScanTasks == 0 then updateStatus("ไม่พบ Path ที่จะสแกน", 100); logOutputWrapper("System", "Focused scan finished (No paths)."); return end
+    if totalScanTasks == 0 then updateStatus("ไม่พบ Path ที่จะสแกน", 100); logOutputWrapper("System", "Focused scan finished (No paths)."); RyntazHub.State.IsScanning = false; return end
 
     for i, scanTask in ipairs(pathsToScanConfig) do
-        if scanTask.isHeist then
-             -- ในเวอร์ชันนี้ การสแกน Heist จะถูกทำเมื่อกดปล้นหรือ "ปล้นทั้งหมด"
-             -- แต่เรายังสามารถ Log ข้อมูลเบื้องต้นของ Heist folder ได้
-            logOutputWrapper("HeistStructure", "ตรวจสอบ Heist Folder: "..scanTask.name)
-            -- exploreFocusedPath(scanTask.instance, scanTask.name, i, totalScanTasks) --  เดิมทีเรียก explore แต่ตอนนี้จะให้ scanAndPrepare ทำ
-            updateStatus("ตรวจสอบ Heist: " .. scanTask.name, (i / totalScanTasks) * 100)
-        else
-            exploreFocusedPath(scanTask.instance, scanTask.name, i, totalScanTasks)
+        local currentRoot = scanTask.instance
+        local currentName = scanTask.name
+        updateStatus("กำลังสแกน: "..currentName, (i-1)/totalScanTasks * 100)
+        if RyntazHub.UIHooks.ScanLogOutput then addCategoryHeaderToUI(currentName) end -- Add header to scan log UI
+
+        local descendants = currentRoot:GetDescendants()
+        local numDescendants = #descendants
+        local updateInterval = math.max(1, math.floor(numDescendants / 10))
+
+        for idx, descendant in ipairs(descendants) do
+            local itemPath = descendant:GetFullName()
+            if descendant:IsA("LuaSourceContainer") then local sCP="";if descendant:IsA("Script")or descendant:IsA("LocalScript")then local s,sr=pcall(function()return descendant.Source end);if s and sr and #sr>0 then sCP=" [Code]";for _,k in ipairs(SENSITIVE_SCRIPT_KEYWORDS)do if sr:lower():match(k)then sCP=sCP.."[K:"..k.."]";break end end else sCP="[SrcErr]"end end;logOutputWrapper("ScriptFound","P: "..itemPath.." |T:"..descendant.ClassName..sCP)end
+            if descendant:IsA("RemoteEvent")or descendant:IsA("RemoteFunction")then logOutputWrapper("RemoteFound","P: "..itemPath.." |T:"..descendant.ClassName)end
+            if descendant:IsA("ProximityPrompt")then logOutputWrapper("ProximityPromptFound","P: "..itemPath.."|Obj:"..(descendant.ObjectText or"-").."|Act:"..(descendant.ActionText or"-").."|Hold:"..tostring(descendant.HoldDuration).."|Dist:"..string.format("%.1f",descendant.MaxActivationDistance).."|En:"..tostring(descendant.Enabled))end
+            if descendant:IsA("BasePart")and not descendant:IsA("Terrain")then local pI="";local iLP=false;for _,k in ipairs(MINI_ROBBERIES_NAMES_EXTENDED)do if descendant.Name:lower():match(k:lower())then iLP=true;pI=pI.."[K:"..k.."]";break end end;if not iLP then for _,k in ipairs(EXTRA_LOOT_KEYWORDS)do if descendant.Name:lower():match(k:lower())then iLP=true;pI=pI.."[K:"..k.."]";break end end end;if iLP then logOutputWrapper("PotentialLoot","P: "..itemPath.." "..pI.."|Pos:"..string.format("%.1f,%.1f,%.1f",descendant.Position.X,descendant.Position.Y,descendant.Position.Z))end;if descendant:FindFirstChildOfClass("TouchTransmitter")then logOutputWrapper("PartWithTouch","P: "..itemPath)end end
+            if idx%updateInterval==0 then updateStatus("สแกน "..currentName..string.format(" (%.0f%%)",(idx/numDescendants)*100),((i-1)/totalScanTasks)*100+((idx/numDescendants)*(1/totalScanTasks)*100));task.wait()end
         end
-        if i < totalScanTasks then task.wait(0.01) end -- ลด delay ตอนสแกน
+        if scanTask.type == "Heist" then
+            scanAndPrepareHeistData(scanTask.heistNameForConfig or scanTask.name, MasterConfig[scanTask.heistNameForConfig or scanTask.name] or {})
+        end
     end
-    updateStatus("การสำรวจเบื้องต้นเสร็จสิ้น.", 100)
-    logOutputWrapper("System", string.format("การสำรวจเบื้องต้นเสร็จสิ้นใน %.2f วินาที.", tick() - startTime))
-    MainUI.UIController.PopulateHeists() -- แสดง Heist Card จาก MasterConfig โดยยังไม่จำเป็นต้องสแกนละเอียด
+    updateStatus("การสำรวจ (Focused) ทั้งหมดเสร็จสิ้น.",100)
+    logOutputWrapper("System",string.format("การสำรวจ (Focused) ทั้งหมดเสร็จสิ้นใน %.2f วินาที.",tick()-startTime))
+    RyntazHub.State.IsScanning = false
+    RyntazHub.UIController.PopulateHeists() -- Populate heist cards after scan
+end
+
+RyntazHub.ExecutionEngine.RunAllSequences = function()
+    startTime = tick()
+    updateStatus("กำลังเตรียมข้อมูล Heists สำหรับการปล้น...", 0)
+    local allHeistsPrepared = true
+    for i, heistKey in ipairs(TARGET_HEISTS_TO_ROB) do
+        if MasterConfig[heistKey] then
+            if not RyntazHub.Scanner.ScanHeist(heistKey, MasterConfig[heistKey]) then allHeistsPrepared = false end
+        else
+            MainUI:CreateNotification("Config Error", "ไม่พบ MasterConfig สำหรับ: " .. heistKey, "Error")
+            allHeistsPrepared = false
+        end
+        updateStatus("เตรียม " .. (MasterConfig[heistKey] and MasterConfig[heistKey].DisplayName or heistKey) .. " เสร็จสิ้น", (i / #TARGET_HEISTS_TO_ROB) * 100)
+        if i < #TARGET_HEISTS_TO_ROB then task.wait(0.1) end
+    end
+
+    if not allHeistsPrepared then
+        MainUI:CreateNotification("ข้อผิดพลาด", "การเตรียมข้อมูลบาง Heist ล้มเหลว", "Error")
+        RyntazHub.State.IsRobbing = false; currentRobberyCoroutine = nil
+        return
+    end
+    RyntazHub.UIController.PopulateHeists() -- Update UI with latest scan for heists
+    updateStatus("เริ่มลำดับการปล้นทั้งหมด...", 0)
+
+    for i, heistKey in ipairs(TARGET_HEISTS_TO_ROB) do
+        if not currentRobberyCoroutine then break end
+        if RyntazHub.Data.Analyzed[heistKey] then
+            RyntazHub.ExecutionEngine.Run(heistKey)
+            local timeout = 0
+            while RyntazHub.State.IsRobbing and RyntazHub.State.CurrentHeist == heistKey and timeout < 300 do task.wait(0.1); timeout = timeout + 0.1 end
+            if RyntazHub.State.IsRobbing and RyntazHub.State.CurrentHeist == heistKey then
+                MainUI:CreateNotification("Timeout", heistKey .. " ใช้เวลานานเกินไป, ถูกหยุด.", "Warning")
+                if RyntazHub.UI[heistKey.."_StatusLabel"] then RyntazHub.UI[heistKey.."_StatusLabel"].Text = "สถานะ: Timeout"; RyntazHub.UI[heistKey.."_StatusLabel"].TextColor3 = THEME.Colors.Error end
+                if RyntazHub.UI[heistKey.."_RobButton"] then RyntazHub.UI[heistKey.."_RobButton"].Text = "เริ่มปล้น"; RyntazHub.UI[heistKey.."_RobButton"].Enabled = true end
+                -- Do not proceed to next heist if one times out and is still marked as robbing
+                RyntazHub.State.IsRobbing = false; RyntazHub.State.CurrentHeist = nil; currentRobberyCoroutine = nil;
+                break 
+            end
+        else MainUI:CreateNotification("ข้าม", heistKey .. " ไม่ได้ถูกเตรียมไว้", "Info") end
+        updateStatus("เสร็จสิ้น " .. (RyntazHub.Data.Analyzed[heistKey] and RyntazHub.Data.Analyzed[heistKey].DisplayName or heistKey), (i / #TARGET_HEISTS_TO_ROB) * 100)
+        if i < #TARGET_HEISTS_TO_ROB and currentRobberyCoroutine then task.wait(1) end
+    end
+    if currentRobberyCoroutine then -- Only if not stopped by timeout/error
+        updateStatus("ปล้นทั้งหมดเสร็จสิ้น.", 100)
+        MainUI:CreateNotification("เสร็จสิ้น", "การปล้นตามลำดับทั้งหมดเสร็จสิ้น", "Success")
+    end
+    RyntazHub.State.IsRobbing = false; currentRobberyCoroutine = nil
 end
 
 task.spawn(function()while true do if SHOW_UI_OUTPUT and mainFrame and mainFrame.Parent and timerTextLabel then if startTime then timerTextLabel.Text=string.format("เวลา: %.1fs",tick()-startTime)else timerTextLabel.Text="เวลา: --.-s"end end;task.wait(0.1)end end)
-if SHOW_UI_OUTPUT then local uiSuccess,uiErr=pcall(MainUI.Build);if not uiSuccess then print("FATAL UI ERROR: "..tostring(uiErr))end else print("RyntazHub UI Built.") end
-task.spawn(function()task.wait(0.2);local scanSuccess,scanErr=pcall(initialScan);if not scanSuccess then logOutputWrapper("SystemError","Scan Error: "..tostring(scanErr));if statusTextLabel and statusTextLabel.Parent then statusTextLabel.Text="สถานะ: Scan Error!"end else logOutputWrapper("System","สแกนเบื้องต้นเสร็จสิ้น. UI พร้อมใช้งาน.")end end)
+
+if SHOW_UI_OUTPUT then local s,e=pcall(MainUI.Build);if not s then print("FATAL UI ERROR: "..tostring(e))end else print("RyntazHub UI Built.")end
+task.spawn(function()task.wait(0.2);local s,e=pcall(RyntazHub.Scanner.FocusedScan);if not s then logOutputWrapper("SystemError","Scan Error: "..tostring(e));if statusTextLabel and statusTextLabel.Parent then statusTextLabel.Text="สถานะ: Scan Error!"end else logOutputWrapper("System","สแกน (Focused) เสร็จสิ้น. UI พร้อมใช้งาน.")end end)
