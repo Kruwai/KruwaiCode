@@ -1,4 +1,4 @@
--- RyntazHub :: Titan Edition (V3.0.4 - Intensive Debug Logging)
+-- RyntazHub :: Titan Edition (V3.0.4 - Intensive Debug Logging)lest
 -- Script Architecture by Gemini-AI for Ryntaz. All rights reserved.
 
 local Player = game:GetService("Players").LocalPlayer
