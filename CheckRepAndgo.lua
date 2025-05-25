@@ -1,5 +1,13 @@
--- RyntazHub AutoRob - V2.6.4 (Focused Scan & AutoRob)
--- (ฐานจาก V2.6.3 เพิ่มระบบ AutoRob และปุ่มควบคุม)
+--[[
+Script สำรวจ Heists และ ReplicatedStorage - V2.6.3 (Streamlined)
+(ฐานจาก V2.6 ที่ผู้ใช้ยืนยันว่ารันได้ ปรับปรุง UI/UX, Progress, Timer, Animation,
+และเน้นการสแกนเฉพาะ Workspace.Heists และ ReplicatedStorage)
+
+เป้าหมาย: ค้นหา Scripts, ProximityPrompts, Remotes และ Parts ที่อาจเกี่ยวข้องกับการปล้น
+แล้วแสดง Path ของสิ่งที่ค้นพบ พร้อมปุ่มคัดลอก
+
+ข้อควรระวัง: สคริปต์นี้มีวัตถุประสงค์เพื่อการทดสอบและปรับปรุงความปลอดภัยเท่านั้น
+]]
 
 local Player = game:GetService("Players").LocalPlayer
 local Workspace = game:GetService("Workspace")
@@ -8,163 +16,221 @@ local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TeamsService = game:GetService("Teams")
 
-local Character, Humanoid, RootPart
-local currentRobberyCoroutine = nil
-local isRobbingGlobally = false
-
-local function waitForCharacter()
-    print("[RyntazHub V2.6.4] Waiting for character...")
-    local attempts = 0
-    repeat attempts = attempts + 1
-        if Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChildOfClass("Humanoid") then
-            Character = Player.Character; Humanoid = Character:FindFirstChildOfClass("Humanoid"); RootPart = Character:FindFirstChild("HumanoidRootPart")
-            if Humanoid and RootPart then print("[RyntazHub V2.6.4] Character found."); return true end
-        end; task.wait(0.2)
-    until attempts > 75
-    print("[RyntazHub V2.6.4] ERROR: Character not found after timeout."); return false
-end
-
-if not waitForCharacter() then print("RyntazHub ERROR: Character not loaded, script will not fully initialize."); return end
-Player.CharacterAdded:Connect(function(newChar) Character=newChar; Humanoid=newChar:WaitForChild("Humanoid",15); RootPart=newChar:WaitForChild("HumanoidRootPart",15); print("[RyntazHub V2.6.4] Character respawned."); if isRobbingGlobally and currentRobberyCoroutine then print("[RyntazHub V2.6.4] Char died during rob. Stopping."); task.cancel(currentRobberyCoroutine); currentRobberyCoroutine=nil; isRobbingGlobally=false; updateStatus("หยุดปล้น (ตัวละครตาย)") end end)
-
+-- ================= CONFIGURATION =================
 local HEISTS_BASE_PATH_STRING = "Heists"
-local TARGET_HEISTS_IN_WORKSPACE_FOR_SCAN = {"Bank", "Casino", "JewelryStore"}
-local TARGET_HEISTS_TO_ROB_SEQUENCE = {"JewelryStore", "Bank", "Casino"}
-local CRIMINAL_TEAM_NAME = "Criminals" 
-local CRIMINAL_BASE_TELEPORT_CFRAME = CFrame.new(200, 10, 200) -- *** แก้ไขเป็นตำแหน่งจริง ***
+local TARGET_HEISTS_IN_WORKSPACE = {"Bank", "Casino", "JewelryStore"}
 
-local AutoHeistSettings = { teleportSpeedFactor = 180, interactionDelay = 0.2, delayAfterSuccessfulLootAction = 0.6, delayAfterHeistCompletion = 2.5, stopOnErrorInSequence = false }
+local SHOW_UI_OUTPUT = true
+local UI_OUTPUT_ENCRYPTION_METHOD = "None" -- "None", "Hex", "Base64"
+local INITIAL_UI_VISIBLE = true
 
-local HEIST_SPECIFIC_CONFIG = {
-    JewelryStore = {
-        DisplayName = "ร้านเพชร", PathString = Workspace.Heists.JewelryStore, RequiresCriminalTeam = true,
-        EntryTeleportCFrame = CFrame.new(-82.8, 85.5, 807.5),
-        RobberyActions = {
-            { Name = "เก็บเครื่องเพชร", ActionType = "IterateAndFireEvent", ItemContainerPath = "EssentialParts.JewelryBoxes", RemoteEventPath = "EssentialParts.JewelryBoxes.JewelryManager.Event", EventArgsFunc = function(lootInstance) return {lootInstance} end, FireCountPerItem = 2, TeleportOffsetPerItem = Vector3.new(0,1.8,1.8), DelayBetweenItems = 0.1, DelayBetweenFires = 0.05, RobDelayAfterAction = 0.2 }
-        },
-        PostRobberyAction = { Type = "TeleportToCriminalBase", Delay = 0.5 }
-    },
-    Bank = {
-        DisplayName = "ธนาคาร", PathString = Workspace.Heists.Bank, RequiresCriminalTeam = true,
-        EntryTeleportCFrame = CFrame.new(730.5, 108.0, 562.5),
-        RobberyActions = {
-            { Name = "เปิดประตูห้องมั่นคง", ActionType = "Touch", TargetPath = "EssentialParts.VaultDoor.Touch", TeleportOffset = Vector3.new(0,0,-2.2), RobDelayAfterAction = 3.0 },
-            { Name = "เก็บเงิน CashStack", ActionType = "IterateAndFindInteract", ItemContainerPath = "Interior.CashStack.Model", ItemNameHint = "Cash", InteractionHint = {Type="RemoteEvent", NameHint="CollectCash", Args=function(item) return {item, 1000} end}, TeleportOffsetPerItem = Vector3.new(0,0.1,0), DelayBetweenItems = 0.2, FireCountPerItem = 1, RobDelayAfterAction = 0.3 }
-        },
-        PostRobberyAction = { Type = "TeleportToCriminalBase", Delay = 0.5 }
-    },
-    Casino = {
-        DisplayName = "คาสิโน", PathString = Workspace.Heists.Casino, RequiresCriminalTeam = true,
-        EntryTeleportCFrame = CFrame.new(1690.2, 30.5, 523.5),
-        RobberyActions = {
-            { Name = "แฮ็กคอมพิวเตอร์", ActionType = "ProximityPrompt", TargetPath = "Interior.HackComputer.HackComputer", ProximityPromptActionHint = "Hack", HoldDuration = 2.0, TeleportOffset = Vector3.new(0,1,-1.8), RobDelayAfterAction = 1.5 },
-            { Name = "เก็บเงินห้องนิรภัย", ActionType = "IterateAndFindInteract", ItemContainerPath = "Interior.Vault", ItemNameHint = "Cash", InteractionHint = {Type="RemoteEvent", NameHint="TakeVaultCash", Args=function(item) return {item} end}, TeleportOffsetPerItem = Vector3.new(0,0.1,0), DelayBetweenItems = 0.3, FireCountPerItem = 1, RobDelayAfterAction = 0.3 }
-        },
-        PostRobberyAction = { Type = "TeleportToCriminalBase", Delay = 0.5 }
-    }
+local EXTRA_LOOT_KEYWORDS = {"moneybag", "goldbar", "artifact", "valuable", "contraband", "keycard", "access", "vault", "safe", "computer", "terminal", "loot", "item", "collectible"}
+local MINI_ROBBERIES_NAMES_EXTENDED = {
+    "Cash", "CashRegister", "DiamondBox", "Laptop", "Phone", "Luggage", "ATM", "TV", "Safe",
+    "Briefcase", "MoneyStack", "GoldStack", "Computer", "Terminal"
 }
-local THEME_COLORS = {Background=Color3.fromRGB(18,20,23),Primary=Color3.fromRGB(25,28,33),Secondary=Color3.fromRGB(35,40,50),Accent=Color3.fromRGB(0,255,120),Text=Color3.fromRGB(210,215,220),TextDim=Color3.fromRGB(130,135,140),ButtonHover=Color3.fromRGB(50,55,70),CloseButton=Color3.fromRGB(255,95,86),MinimizeButton=Color3.fromRGB(255,189,46),MaximizeButton=Color3.fromRGB(40,200,65)}
-local mainFrame,outputContainer,titleBar,statusBar,statusTextLabel,timerTextLabel;local allLoggedMessages={};local isMinimized=not INITIAL_UI_VISIBLE;local originalMainFrameSize=UDim2.new(0.6,0,0.75,0);local startTime
-local function copyToClipboard(t)local s,m=pcall(function()if typeof(setclipboard)=="function"then setclipboard(t);return true end;if typeof(writefile)=="function"then writefile("ryntaz_clipboard.txt",t);return true end;return false end);print(s and(m and"[Clipboard] Copied."or"[Clipboard] Failed.")or"[Clipboard] No function.");if SHOW_UI_OUTPUT and statusTextLabel and statusTextLabel.Parent then local oS=statusTextLabel.Text;statusTextLabel.Text=s and(m and"Clipboard: OK"or"FAIL")or"N/A";task.delay(2,function()if statusTextLabel and statusTextLabel.Parent then statusTextLabel.Text=oS end end)end;return m end
-local function createStyledButton(p,t,s,pos,c,tc,fs)local b=Instance.new("TextButton",p);b.Text=t;b.Size=s;b.Position=pos;b.BackgroundColor3=c or THEME_COLORS.Secondary;b.TextColor3=tc or THEME_COLORS.Text;b.Font=Enum.Font.SourceSansSemibold;b.TextSize=fs or 14;b.ClipsDescendants=true;local cr=Instance.new("UICorner",b);cr.CornerRadius=UDim.new(0,4);b.MouseEnter:Connect(function()TweenService:Create(b,TweenInfo.new(0.1),{BackgroundColor3=THEME_COLORS.ButtonHover}):Play()end);b.MouseLeave:Connect(function()TweenService:Create(b,TweenInfo.new(0.1),{BackgroundColor3=c or THEME_COLORS.Secondary}):Play()end);return b end
-local function introAnimationV2(pg)local iF=Instance.new("Frame",pg);iF.Name="Intro";iF.Size=UDim2.new(1,0,1,0);iF.BackgroundTransparency=1;iF.ZIndex=2000;local tL=Instance.new("TextLabel",iF);tL.Name="RText";tL.Size=UDim2.new(0,0,0,0);tL.Position=UDim2.new(0.5,0,0.5,0);tL.AnchorPoint=Vector2.new(0.5,0.5);tL.Font=Enum.Font.Michroma;tL.Text="";tL.TextColor3=THEME_COLORS.Accent;tL.TextScaled=false;tL.TextSize=1;tL.TextTransparency=1;tL.Rotation=-10;local fT="Ryntaz Hub V6";local tD=0.6;local sD=0.5;local fD=0.3;TweenService:Create(tL,TweenInfo.new(tD,Enum.EasingStyle.Quint,Enum.EasingDirection.Out),{TextSize=60,TextTransparency=0,Rotation=0,Size=UDim2.new(0.5,0,0.15,0)}):Play();for i=1,#fT do tL.Text=string.sub(fT,1,i);task.wait(tD/#fT*0.6)end;task.wait(sD);TweenService:Create(tL,TweenInfo.new(fD,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{TextTransparency=1,Rotation=5,Position=UDim2.new(0.5,0,0.45,0)}):Play();task.delay(fD+0.1,function()if iF and iF.Parent then iF:Destroy()end end)end
-local function logOutputWrapper(category,message)local ts=os.date("[%H:%M:%S] ");local oM=message;local fMFC=ts.."["..category.."] "..oM;print(fMFC);table.insert(allLoggedMessages,fMFC);if SHOW_UI_OUTPUT and mainFrame and outputContainer then local entry=Instance.new("TextLabel",outputContainer);entry.Name="Log";entry.Text=ts.."<b>["..category.."]</b> "..message;entry.RichText=true;entry.TextColor3=(category:match("Error")or category:match("Fail"))and Color3.fromRGB(255,100,100)or(category:match("Success"))and Color3.fromRGB(100,255,100)or THEME_COLORS.TextDim;entry.Font=Enum.Font.Code;entry.TextSize=12;entry.TextXAlignment=Enum.TextXAlignment.Left;entry.TextWrapped=true;entry.Size=UDim2.new(1,-8,0,0);entry.AutomaticSize=Enum.AutomaticSize.Y;entry.BackgroundColor3=THEME_COLORS.Primary;entry.BackgroundTransparency=0.7;local co=Instance.new("UICorner",entry);co.CornerRadius=UDim.new(0,2);local th=5;for _,c in ipairs(outputContainer:GetChildren())do if c:IsA("TextLabel")then th=th+c.AbsoluteSize.Y+outputContainer.UIListLayout.Padding.Offset end end;outputContainer.CanvasSize=UDim2.new(0,0,0,th);if outputContainer.CanvasSize.Y.Offset>outputContainer.AbsoluteSize.Y then outputContainer.CanvasPosition=Vector2.new(0,outputContainer.CanvasSize.Y.Offset-outputContainer.AbsoluteSize.Y)end end end
-local function updateStatus(text,overallPercentage)if SHOW_UI_OUTPUT and statusTextLabel and statusTextLabel.Parent then local currentText="สถานะ: "..text;if overallPercentage then currentText=currentText..string.format(" (รวม: %.0f%%)",overallPercentage)end;statusTextLabel.Text=currentText end;print("[StatusUpdate] "..text..(overallPercentage and string.format(" (รวม: %.0f%%)",overallPercentage)or""))end
-local function findRemote(parentInst,nameHint)if not parentInst then return nil end;for _,D in ipairs(parentInst:GetDescendants())do if D:IsA("RemoteEvent")and D.Name:lower():match(nameHint:lower())then return D end end;for _,D in ipairs(parentInst:GetDescendants())do if D:IsA("RemoteFunction")and D.Name:lower():match(nameHint:lower())then return D end end;return nil end
-local function findPrompt(parentInst,actionHint)if not parentInst then return nil end;for _,D in ipairs(parentInst:GetDescendants())do if D:IsA("ProximityPrompt")then if D.ActionText and D.ActionText:lower():match(actionHint:lower())then return D elseif D.ObjectText and D.ObjectText:lower():match(actionHint:lower())then return D end end end;return nil end
-local function createMainUI_V6()
-    if mainFrame and mainFrame.Parent then mainFrame.Parent:Destroy() end
-    local playerGui = Player:WaitForChild("PlayerGui"); if not playerGui then print("[UI Error] PlayerGui V6 not found!"); return end
-    local screenGui = Instance.new("ScreenGui",playerGui);screenGui.Name="RyntazAutoRobV6_MainCtrl";screenGui.ResetOnSpawn=false;screenGui.DisplayOrder=999;screenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-    introAnimationV2(screenGui); task.wait(1.4)
-    mainFrame=Instance.new("Frame",screenGui);mainFrame.Name="MainFrame";mainFrame.Size=UDim2.new(0,260,0,150);mainFrame.Position=UDim2.new(0.02,10,0.5,-75);mainFrame.BackgroundColor3=THEME_COLORS.Background;mainFrame.BorderColor3=THEME_COLORS.Accent;mainFrame.BorderSizePixel=1;local c=Instance.new("UICorner",mainFrame);c.CornerRadius=UDim.new(0,5);
-    titleBar=Instance.new("Frame",mainFrame);titleBar.Name="TitleBar";titleBar.Size=UDim2.new(1,0,0,28);titleBar.BackgroundColor3=THEME_COLORS.Primary;local tc=Instance.new("UICorner",titleBar);tc.CornerRadius=UDim.new(0,4);
-    local titleText=Instance.new("TextLabel",titleBar);titleText.Name="Title";titleText.Size=UDim2.new(1,-50,1,0);titleText.Position=UDim2.new(0.5,0,0.5,0);titleText.AnchorPoint=Vector2.new(0.5,0.5);titleText.Text="RyntazRob V6.0";titleText.TextColor3=THEME_COLORS.Accent;titleText.Font=Enum.Font.Michroma;titleText.TextSize=12;titleText.BackgroundTransparency=1;titleText.TextXAlignment = Enum.TextXAlignment.Center
-    local closeBtn=createStyledButton(titleBar,"X",UDim2.new(0,20,0.8,0),UDim2.new(1,-25,0.1,0),THEME_COLORS.Error,Color3.new(1,1,1),12)
-    closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy(); if currentRobberyCoroutine then task.cancel(currentRobberyCoroutine); isRobbingGlobally=false; print("[UI] Robbery stopped & UI closed.") end end)
-    local contentFrame=Instance.new("Frame",mainFrame);contentFrame.Name="Content";contentFrame.Size=UDim2.new(1,-10,1,-38);contentFrame.Position=UDim2.new(0,5,0,33);contentFrame.BackgroundTransparency=1;local l=Instance.new("UIListLayout",contentFrame);l.Padding=UDim.new(0,5);l.HorizontalAlignment=Enum.HorizontalAlignment.Center;l.VerticalAlignment=Enum.VerticalAlignment.Top;l.SortOrder=Enum.SortOrder.LayoutOrder
-    statusTextLabel=Instance.new("TextLabel",contentFrame);statusTextLabel.Name="Status";statusTextLabel.LayoutOrder=1;statusTextLabel.Size=UDim2.new(1,-0,0,18);statusTextLabel.Text="สถานะ: พร้อม (UI V6)";statusTextLabel.TextColor3=THEME_COLORS.TextDim;statusTextLabel.Font=Enum.Font.Code;statusTextLabel.TextSize=11;statusTextLabel.BackgroundTransparency=1;statusTextLabel.TextWrapped=true;statusTextLabel.TextYAlignment = Enum.TextYAlignment.Top
-    local startButton=createStyledButton(contentFrame,"เริ่มปล้นทั้งหมด",UDim2.new(1,0,0,30),UDim2.new(),THEME_COLORS.Accent,THEME_COLORS.Background,13);startButton.LayoutOrder=2
-    startButton.MouseButton1Click:Connect(function()if not isRobbingGlobally then task.spawn(executeAllRobberiesAndHop)else logOutputWrapper("Control","ปล้นอยู่แล้ว")end end)
-    local stopButton=createStyledButton(contentFrame,"หยุดปล้น",UDim2.new(1,0,0,30),UDim2.new(),THEME_COLORS.Error,Color3.new(1,1,1),13);stopButton.LayoutOrder=3
-    stopButton.MouseButton1Click:Connect(function()if currentRobberyCoroutine then isRobbingGlobally=false;task.cancel(currentRobberyCoroutine);currentRobberyCoroutine=nil;logOutputWrapper("Control","สั่งหยุดปล้น");updateStatus("หยุดโดยผู้ใช้")else logOutputWrapper("Control","ไม่มีอะไรให้หยุด")end end)
-    mainFrame.Draggable = true; mainFrame.Active = true;
-    logOutputWrapper("UI", "Control UI (V6) Created.")
+local SENSITIVE_SCRIPT_KEYWORDS = {"admin", "exploit", "hack", "remote", "event", "fire", "invoke", "money", "cash", "rob", "heist", "security", "bypass", "kill", "fly", "speed", "esp", "trigger", "pcall", "require", "network", "signal"}
+
+
+-- ================= THEME & UI SETTINGS (เหมือน V2.6) =================
+local THEME_COLORS = {
+    Background = Color3.fromRGB(18, 20, 23), Primary = Color3.fromRGB(25, 28, 33),
+    Secondary = Color3.fromRGB(35, 40, 50), Accent = Color3.fromRGB(0, 255, 120),
+    Text = Color3.fromRGB(210, 215, 220), TextDim = Color3.fromRGB(130, 135, 140),
+    ButtonHover = Color3.fromRGB(50, 55, 70), CloseButton = Color3.fromRGB(255, 95, 86),
+    MinimizeButton = Color3.fromRGB(255, 189, 46), MaximizeButton = Color3.fromRGB(40, 200, 65)
+}
+
+-- ================= UI ELEMENTS & FUNCTIONS (เหมือน V2.6) =================
+local mainFrame
+local outputContainer
+local titleBar
+local statusBar
+local statusTextLabel
+local timerTextLabel
+local allLoggedMessages = {}
+local isMinimized = not INITIAL_UI_VISIBLE
+local originalMainFrameSize = UDim2.new(0.6, 0, 0.75, 0)
+local originalMainFramePosition
+
+local startTime
+
+local function copyToClipboard(textToCopy)
+    local success = false; local message = ""
+    if typeof(setclipboard) == "function" then
+        pcall(function() setclipboard(textToCopy); success = true end)
+        message = success and "[Clipboard] Copied." or "[Clipboard] Failed to copy."
+    elseif typeof(writefile) == "function" then
+        pcall(function() writefile("ryntaz_explorer_clipboard.txt", textToCopy); success = true end)
+        message = success and "[Clipboard] Saved to ryntaz_explorer_clipboard.txt." or "[Clipboard] Failed to save file."
+    else message = "[Clipboard] No copy/writefile function." end
+    print(message)
+    if SHOW_UI_OUTPUT and mainFrame and outputContainer then
+        local tempLabel = outputContainer:FindFirstChild("TempStatusLabel") or Instance.new("TextLabel", outputContainer)
+        tempLabel.Name = "TempStatusLabel"; tempLabel.Size = UDim2.new(1, -10, 0, 20)
+        tempLabel.BackgroundColor3 = THEME_COLORS.Accent; tempLabel.TextColor3 = THEME_COLORS.Text -- Changed to Text for visibility
+        tempLabel.Font = Enum.Font.SourceSansSemibold; tempLabel.TextSize = 14
+        tempLabel.LayoutOrder = -1000; tempLabel.ZIndex = 100; tempLabel.Text = message; tempLabel.Visible = true
+        task.delay(2, function() if tempLabel and tempLabel.Parent then tempLabel.Visible = false end end)
+    end
+    return success
 end
 
-local function attemptSingleRobberyAction(actionConfig, heistFolder, heistDisplayName) if not (Character and Humanoid and HumanoidRootPart and Humanoid.Health > 0) then logOutputWrapper("RobError", string.format("[%s] ตัวละครตาย/หาย. ข้าม: %s", heistDisplayName, actionConfig.Name)); return false end; updateStatus(string.format("%s: %s", heistDisplayName, actionConfig.Name)); local targetInstance; local teleportBaseCFrame; if actionConfig.TargetPath then targetInstance = findInstance(heistFolder, actionConfig.TargetPath); if not targetInstance then logOutputWrapper("RobError", string.format("    [Error-%s] TargetPath ไม่พบ: %s", heistDisplayName, actionConfig.TargetPath)); return false end; teleportBaseCFrame = (targetInstance:IsA("Model") and targetInstance:GetPivot() or targetInstance.CFrame) elseif actionConfig.ActionType:match("Iterate") then teleportBaseCFrame = heistFolder:GetPivot() else logOutputWrapper("RobError", string.format("    [Error-%s] Action '%s' ต้องการ TargetPath หรือเป็น Iterate type.", heistDisplayName, actionConfig.Name)); return false end; if not teleportTo(teleportBaseCFrame * CFrame.new(actionConfig.TeleportOffset or Vector3.new()), actionConfig.Name .. " (Init)") then return false end; local robSuccessful = false; if actionConfig.ActionType == "Touch" and targetInstance then if typeof(firetouchinterest) == "function" and targetInstance:IsA("BasePart") then logOutputWrapper("RobAction", "    Firing touch interest for: ".. targetInstance.Name); pcall(firetouchinterest, targetInstance, RootPart, 0); task.wait(0.05); pcall(firetouchinterest, targetInstance, RootPart, 1); robSuccessful = true else logOutputWrapper("RobInfo","    firetouchinterest N/A หรือ target ไม่ใช่ BasePart.") end elseif actionConfig.ActionType == "ProximityPrompt" and targetInstance then local prompt = findPrompt(targetInstance, actionConfig.ProximityPromptActionHint or targetInstance.Name); if prompt then if typeof(fireproximityprompt) == "function" then logOutputWrapper("RobAction",string.format("    Firing PP: %s (Hold: %.1fs)", prompt.ActionText or prompt.ObjectText or "Unknown", actionConfig.HoldDuration or 0)); pcall(fireproximityprompt, prompt, actionConfig.HoldDuration or 0); robSuccessful = true else logOutputWrapper("RobInfo","    fireproximityprompt N/A.") end else logOutputWrapper("RobWarning","    ProximityPrompt ไม่พบสำหรับ: ".. targetInstance.Name.." Hint: "..tostring(actionConfig.ProximityPromptActionHint)) end elseif (actionConfig.ActionType == "RemoteEvent" or actionConfig.ActionType == "IterateAndFireEvent") then local itemsToProcess = {}; local remoteEventInstance; local searchBaseForItems = actionConfig.ItemContainerPath and findInstance(heistFolder, actionConfig.ItemContainerPath) or heistFolder; if not searchBaseForItems then logOutputWrapper("RobError", "    [Error] ItemContainerPath ไม่พบ: " .. (actionConfig.ItemContainerPath or "N/A")); return false end; if actionConfig.ActionType == "IterateAndFireEvent" then if actionConfig.ItemQuery then itemsToProcess = actionConfig.ItemQuery(searchBaseForItems) else for _,child in ipairs(searchBaseForItems:GetChildren()) do if (child:IsA("Model") or child:IsA("BasePart")) and (not actionConfig.ItemNameHint or child.Name:lower():match(actionConfig.ItemNameHint:lower())) then table.insert(itemsToProcess, child) end end end else if targetInstance then table.insert(itemsToProcess, targetInstance) else logOutputWrapper("RobError","    [Error] TargetPath needed for SingleEvent."); return false end end; if #itemsToProcess == 0 then logOutputWrapper("RobInfo","    No items for: " .. actionConfig.Name); return true end; if actionConfig.RemoteEventPath then remoteEventInstance = findInstance(Workspace, actionConfig.RemoteEventPath) or findInstance(searchBaseForItems, actionConfig.RemoteEventPath) or (itemsToProcess[1] and itemsToProcess[1]:FindFirstChild(actionConfig.RemoteEventPath, true)) elseif actionConfig.RemoteEventNameHint then remoteEventInstance = findRemote(itemsToProcess[1], actionConfig.RemoteEventNameHint) or findRemote(itemsToProcess[1] and itemsToProcess[1].Parent, actionConfig.RemoteEventNameHint) or findRemote(heistFolder, actionConfig.RemoteEventNameHint) end; if not remoteEventInstance or not remoteEventInstance:IsA("RemoteEvent") then logOutputWrapper("RobError","    [Error] RemoteEvent not found for "..actionConfig.Name.." (Path/Hint: "..tostring(actionConfig.RemoteEventPath or actionConfig.RemoteEventNameHint)..")"); return false end; for i, itemInst in ipairs(itemsToProcess) do if not (Character and Humanoid.Health > 0 and currentRobberyCoroutine) then logOutputWrapper("RobInfo","    Robbery interrupted."); return false end; if not teleportTo((itemInst:IsA("Model") and itemInst:GetPivot() or itemInst.CFrame) * CFrame.new(actionConfig.TeleportOffsetPerItem or actionConfig.TeleportOffset or Vector3.new()), actionConfig.Name .. " Item " .. i) then return false end; local argsToFire = {}; if actionConfig.EventArgsFunc then argsToFire = actionConfig.EventArgsFunc(itemInst) or {} end; logOutputWrapper("RobAction",string.format("    Firing RE: %s for %s (%d/%d)", remoteEventInstance.Name, itemInst.Name, i, #itemsToProcess)); for fc = 1, actionConfig.FireCountPerItem or 1 do if not (Character and Humanoid.Health > 0 and currentRobberyCoroutine) then logOutputWrapper("RobInfo","    Robbery interrupted fire loop."); return false end; local s,e = pcall(function() remoteEventInstance:FireServer(unpack(argsToFire)) end); if not s then logOutputWrapper("RobError","      Error firing: "..tostring(e)) end; task.wait(actionConfig.DelayBetweenFires or 0.05) end; robSuccessful = true; if #itemsToProcess > 1 and i < #itemsToProcess then task.wait(actionConfig.DelayBetweenItems or 0.1) end end end; if robSuccessful then logOutputWrapper("RobSuccess",string.format("    Action '%s' completed.", actionConfig.Name)) else logOutputWrapper("RobFail",string.format("    Action '%s' failed/no interaction.", actionConfig.Name)) end; if actionConfig.RobDelayAfterAction then logOutputWrapper("RobInfo",string.format("    Waiting %.2fs after action '%s'", actionConfig.RobDelayAfterAction, actionConfig.Name)); task.wait(actionConfig.RobDelayAfterAction) end; return robSuccessful end
-function executeFullHeistRobbery(heistName) local config = HEIST_SPECIFIC_CONFIG[heistName]; if not config then logOutputWrapper("HeistError", "No config for: " .. heistName); return false end; local heistFolder = findInstance(config.PathString); if not heistFolder then logOutputWrapper("HeistError", "Heist folder not found: " .. config.PathString); return false end; logOutputWrapper("HeistStart",string.format("--- เริ่มปล้น: %s ---", config.DisplayName)); if config.EntryTeleportCFrame and RootPart then if not teleportTo(config.EntryTeleportCFrame, config.DisplayName .. " Entry") then return false end; task.wait(0.3) end; for i, actionConfig in ipairs(config.RobberyActions or {}) do if not currentRobberyCoroutine then logOutputWrapper("HeistInfo", "การปล้นถูกยกเลิกโดยผู้ใช้"); return false end; if not (Character and Humanoid and Humanoid.Health > 0) then logOutputWrapper("HeistInfo", "ตัวละครตาย, หยุดปล้น: " .. config.DisplayName); return false end; if not attemptSingleRobberyAction(actionConfig, heistFolder, config.DisplayName) then logOutputWrapper("HeistError",string.format("Action '%s' ใน %s ล้มเหลว. หยุด Heist นี้.", actionConfig.Name, config.DisplayName)); return false end; task.wait(AutoHeistSettings.interactionDelay) end; logOutputWrapper("HeistSuccess",string.format("--- ปล้น %s สำเร็จ ---", config.DisplayName)); if config.PostRobberyAction and config.PostRobberyAction.Type == "TeleportToCriminalBase" then logOutputWrapper("HeistInfo", "กำลังเทเลพอร์ตไปฐานโจร..."); task.wait(config.PostRobberyAction.Delay or 0.1); teleportTo(CRIMINAL_BASE_TELEPORT_CFRAME, "Criminal Base") end; if config.DelayAfterHeist then logOutputWrapper("HeistInfo",string.format("รอ %.1fs หลังปล้น %s", config.DelayAfterHeist, config.DisplayName)); task.wait(config.DelayAfterHeist) end; return true end
-local function ServerHop() printDebug("[ServerHop] Attempting..."); local s,e=pcall(function() local S={}; local R=HttpService:RequestAsync({Url="https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true",Method="GET"}); if not R or not R.Success or not R.Body then printDebug("[ServerHop] Fail get list: "..(R and R.Body or "No resp")); return end; local B=HttpService:JSONDecode(R.Body); if B and B.data then for _,v in next,B.data do if type(v)=="table"and tonumber(v.playing)and tonumber(v.maxPlayers)and v.playing<v.maxPlayers and v.id~=game.JobId then table.insert(S,1,v.id)end end end; printDebug("[ServerHop] Found "..#S.." servers."); if #S>0 then TeleportService:TeleportToPlaceInstance(game.PlaceId,S[math.random(1,#S)],Player) else printDebug("[ServerHop] No other servers."); if #Player:GetPlayers()<=1 then Player:Kick("Rejoining...");task.wait(1);TeleportService:Teleport(game.PlaceId,Player)else TeleportService:TeleportToPlaceInstance(game.PlaceId,game.JobId,Player)end end end); if not s then printDebug("[ServerHop] PcallFail: "..tostring(e)); TeleportService:TeleportToPlaceInstance(game.PlaceId,game.JobId,Player) end end
+local function createStyledButton(parent, text, size, position, colorOverride, textColorOverride)
+    local button = Instance.new("TextButton", parent); button.Text = text; button.Size = size; button.Position = position
+    button.BackgroundColor3 = colorOverride or THEME_COLORS.Secondary
+    button.TextColor3 = textColorOverride or THEME_COLORS.Text
+    button.Font = Enum.Font.SourceSansSemibold; button.TextSize = 14; button.ClipsDescendants = true
+    local corner = Instance.new("UICorner", button); corner.CornerRadius = UDim.new(0, 4)
+    button.MouseEnter:Connect(function() TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = THEME_COLORS.ButtonHover}):Play() end)
+    button.MouseLeave:Connect(function() TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = colorOverride or THEME_COLORS.Secondary}):Play() end)
+    return button
+end
 
-function executeAllRobberiesAndHop()
-    if isRobbingGlobally then logOutputWrapper("RobCtrl","การปล้นกำลังทำงานอยู่แล้ว"); return end
-    isRobbingGlobally = true; currentRobberyCoroutine = coroutine.running()
-    logOutputWrapper("System", "--- เริ่มการปล้นทั้งหมดอัตโนมัติ (V6.0.1) ---"); startTime = tick()
-    updateStatus("เริ่มลำดับการปล้น...")
+local function introAnimationV2(parentGui)
+    local introFrame = Instance.new("Frame", parentGui); introFrame.Name = "IntroAnimationV2"
+    introFrame.Size = UDim2.new(1, 0, 1, 0); introFrame.Position = UDim2.new(0, 0, 0, 0)
+    introFrame.BackgroundTransparency = 1; introFrame.ZIndex = 2000
+
+    local textLabel = Instance.new("TextLabel", introFrame)
+    textLabel.Name = "RyntazHubText"; textLabel.Size = UDim2.new(0.8, 0, 0.3, 0)
+    textLabel.Position = UDim2.new(0.5, 0, 0.5, 0); textLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+    textLabel.BackgroundTransparency = 1; textLabel.Font = Enum.Font.Michroma
+    textLabel.Text = ""; textLabel.TextColor3 = THEME_COLORS.Accent; textLabel.TextScaled = true
+    textLabel.TextStrokeTransparency = 0.3; textLabel.TextStrokeColor3 = Color3.fromRGB(10,10,10)
+
+    local fullText = "Ryntaz Hub"; local typeDuration = 0.8; local stayDuration = 0.7; local fadeOutDuration = 0.5
+    textLabel.TextTransparency = 0
+    for i = 1, #fullText do textLabel.Text = string.sub(fullText, 1, i); task.wait(typeDuration / #fullText) end
+    task.wait(stayDuration)
+    TweenService:Create(textLabel, TweenInfo.new(fadeOutDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1, TextStrokeTransparency = 1}):Play()
+    task.delay(fadeOutDuration + 0.1, function() if introFrame and introFrame.Parent then introFrame:Destroy() end end)
+end
+
+local function createMainUI()
+    if mainFrame and mainFrame.Parent then mainFrame.Parent:Destroy(); mainFrame = nil; end -- Ensure clean slate
+    local playerGui = Player:WaitForChild("PlayerGui")
+    if not playerGui then print("ERROR: PlayerGui not found in createMainUI"); return end
+
+    local screenGui = Instance.new("ScreenGui", playerGui)
+    screenGui.Name = "RyntazHub_Explorer_V2_6_3_Base"
+    screenGui.ResetOnSpawn = false; screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; screenGui.DisplayOrder = 999
     
-    local playerTeam = getPlayerTeam()
-    if not playerTeam or playerTeam.Name ~= CRIMINAL_TEAM_NAME then
-        logOutputWrapper("RobError", string.format("ผู้เล่นไม่ได้อยู่ในทีม '%s'. ไม่สามารถเริ่มการปล้นได้.", CRIMINAL_TEAM_NAME))
-        isRobbingGlobally = false; currentRobberyCoroutine = nil; updateStatus("ต้องอยู่ทีม " .. CRIMINAL_TEAM_NAME); return
+    introAnimationV2(screenGui); task.wait(1.6)
+
+    mainFrame = Instance.new("Frame", screenGui); mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.fromScale(0.01,0.01); mainFrame.Position = UDim2.new(0.5,0,0.5,0)
+    mainFrame.AnchorPoint = Vector2.new(0.5, 0.5); mainFrame.BackgroundColor3 = THEME_COLORS.Background
+    mainFrame.BorderSizePixel = 1; mainFrame.BorderColor3 = THEME_COLORS.Accent; mainFrame.ClipsDescendants = true
+    local frameCorner = Instance.new("UICorner", mainFrame); frameCorner.CornerRadius = UDim.new(0, 6)
+
+    titleBar = Instance.new("Frame", mainFrame); titleBar.Name = "TitleBar"
+    titleBar.Size = UDim2.new(1,0,0,30); titleBar.BackgroundColor3 = THEME_COLORS.Primary
+    titleBar.BorderSizePixel = 0; titleBar.ZIndex = 3
+    local titleText = Instance.new("TextLabel", titleBar); titleText.Name = "TitleText"
+    titleText.Size = UDim2.new(1,-80,1,0); titleText.Position = UDim2.new(0.5,0,0.5,0)
+    titleText.AnchorPoint = Vector2.new(0.5,0.5); titleText.BackgroundTransparency = 1
+    titleText.Font = Enum.Font.Michroma; titleText.Text = "RyntazHub :: Focused Explorer"
+    titleText.TextColor3 = THEME_COLORS.Accent; titleText.TextSize = 15; titleText.TextXAlignment = Enum.TextXAlignment.Center
+
+    local buttonSize = UDim2.new(0,12,0,12); local btnY = 0.5; local btnYOffset = -6
+    local closeBtn = Instance.new("ImageButton",titleBar);closeBtn.Name="Close";closeBtn.Size=buttonSize;closeBtn.Position=UDim2.new(0,10,btnY,btnYOffset);closeBtn.Image="rbxassetid://13516625";closeBtn.ImageColor3=THEME_COLORS.CloseButton;closeBtn.BackgroundTransparency=1;closeBtn.ZIndex=4
+    local minBtn = Instance.new("ImageButton",titleBar);minBtn.Name="Minimize";minBtn.Size=buttonSize;minBtn.Position=UDim2.new(0,30,btnY,btnYOffset);minBtn.Image="rbxassetid://13516625";minBtn.ImageColor3=THEME_COLORS.MinimizeButton;minBtn.BackgroundTransparency=1;minBtn.ZIndex=4
+    local maxBtn = Instance.new("ImageButton",titleBar);maxBtn.Name="Maximize";maxBtn.Size=buttonSize;maxBtn.Position=UDim2.new(0,50,btnY,btnYOffset);maxBtn.Image="rbxassetid://13516625";maxBtn.ImageColor3=THEME_COLORS.MaximizeButton;maxBtn.BackgroundTransparency=1;maxBtn.ZIndex=4
+
+    outputContainer = Instance.new("ScrollingFrame", mainFrame); outputContainer.Name = "OutputContainer"
+    outputContainer.Size = UDim2.new(1,-10,1,-95); outputContainer.Position = UDim2.new(0,5,0,30)
+    outputContainer.BackgroundColor3 = Color3.fromRGB(22,24,27); outputContainer.BorderSizePixel = 1; outputContainer.BorderColor3 = THEME_COLORS.Secondary
+    outputContainer.CanvasSize = UDim2.new(0,0,0,0); outputContainer.ScrollBarImageColor3 = THEME_COLORS.Accent
+    outputContainer.ScrollBarThickness = 8; outputContainer.ZIndex = 1; local oc = Instance.new("UICorner",outputContainer); oc.CornerRadius = UDim.new(0,4)
+    local listLayout = Instance.new("UIListLayout", outputContainer); listLayout.Padding = UDim.new(0,2); listLayout.SortOrder = Enum.SortOrder.LayoutOrder; listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left; listLayout.FillDirection = Enum.FillDirection.Vertical
+
+    statusBar = Instance.new("Frame", mainFrame); statusBar.Name = "StatusBar"; statusBar.Size = UDim2.new(1,-10,0,25)
+    statusBar.Position = UDim2.new(0,5,1,-60); statusBar.BackgroundColor3 = THEME_COLORS.Primary; statusBar.BackgroundTransparency = 0.5; statusBar.ZIndex = 2; local sc = Instance.new("UICorner",statusBar); sc.CornerRadius = UDim.new(0,3)
+    statusTextLabel = Instance.new("TextLabel", statusBar); statusTextLabel.Name = "StatusText"; statusTextLabel.Size = UDim2.new(0.75,-5,1,0); statusTextLabel.Position = UDim2.new(0,5,0,0); statusTextLabel.BackgroundTransparency = 1; statusTextLabel.Font = Enum.Font.Code; statusTextLabel.Text = "สถานะ: ว่าง"; statusTextLabel.TextColor3 = THEME_COLORS.TextDim; statusTextLabel.TextSize = 12; statusTextLabel.TextXAlignment = Enum.TextXAlignment.Left
+    timerTextLabel = Instance.new("TextLabel", statusBar); timerTextLabel.Name = "TimerText"; timerTextLabel.Size = UDim2.new(0.25,-5,1,0); timerTextLabel.Position = UDim2.new(0.75,5,0,0); timerTextLabel.BackgroundTransparency = 1; timerTextLabel.Font = Enum.Font.Code; timerTextLabel.Text = "เวลา: 0.0วิ"; timerTextLabel.TextColor3 = THEME_COLORS.TextDim; timerTextLabel.TextSize = 12; timerTextLabel.TextXAlignment = Enum.TextXAlignment.Right
+
+    local bottomBar = Instance.new("Frame", mainFrame); bottomBar.Name = "BottomBar"; bottomBar.Size = UDim2.new(1,0,0,30); bottomBar.Position = UDim2.new(0,0,1,-30); bottomBar.BackgroundColor3 = THEME_COLORS.Primary; bottomBar.ZIndex = 2
+    local copyAllBtn = createStyledButton(bottomBar,"คัดลอก Log ทั้งหมด",UDim2.new(0.45, -10, 0.8, 0),UDim2.new(0.02, 0, 0.1, 0))
+    local clearLogBtn = createStyledButton(bottomBar,"ล้าง Log (UI)",UDim2.new(0.25, -5, 0.8, 0),UDim2.new(0.48, 0, 0.1, 0))
+    local rescanBtn = createStyledButton(bottomBar,"สแกนอีกครั้ง",UDim2.new(0.23, -10, 0.8, 0),UDim2.new(0.75, 0, 0.1, 0))
+    
+    local dragging = false; local dragInput, dragStart, startPositionFrame
+    titleBar.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true; dragStart = input.Position; startPositionFrame = mainFrame.Position; input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end) end end)
+    UserInputService.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then if dragging and dragStart then local delta = input.Position - dragStart; mainFrame.Position = UDim2.new(startPositionFrame.X.Scale, startPositionFrame.X.Offset + delta.X, startPositionFrame.Y.Scale, startPositionFrame.Y.Offset + delta.Y) end end end)
+    closeBtn.MouseButton1Click:Connect(function() local ct = TweenService:Create(mainFrame,TweenInfo.new(0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{Size=UDim2.fromScale(0.01,0.01),Position=UDim2.new(0.5,0,0.5,0),Transparency=1});ct:Play();ct.Completed:Wait();screenGui:Destroy();mainFrame=nil end)
+    local isContentVisible = INITIAL_UI_VISIBLE; local function toggleContentVisibility() isContentVisible = not isContentVisible; outputContainer.Visible = isContentVisible; bottomBar.Visible = isContentVisible; statusBar.Visible = isContentVisible; local ts; if isContentVisible then ts = originalMainFrameSize; maxBtn.ImageColor3 = THEME_COLORS.MaximizeButton; minBtn.ImageColor3 = THEME_COLORS.MinimizeButton else ts = UDim2.new(originalMainFrameSize.X.Scale,originalMainFrameSize.X.Offset,0,titleBar.AbsoluteSize.Y); maxBtn.ImageColor3 = THEME_COLORS.Accent; minBtn.ImageColor3 = THEME_COLORS.Accent end; TweenService:Create(mainFrame,TweenInfo.new(0.2),{Size=ts}):Play() end
+    minBtn.MouseButton1Click:Connect(toggleContentVisibility); maxBtn.MouseButton1Click:Connect(toggleContentVisibility)
+    copyAllBtn.MouseButton1Click:Connect(function() local at = "-- RyntazHub Explorer Log --\n"; for _,e in ipairs(allLoggedMessages)do at=at..e.."\n"end; if copyToClipboard(at)then copyAllBtn.Text="คัดลอกแล้ว!"else copyAllBtn.Text="พลาด!"end; task.wait(1.5);copyAllBtn.Text="คัดลอก Log ทั้งหมด"end)
+    clearLogBtn.MouseButton1Click:Connect(function() allLoggedMessages={}; for _,c in ipairs(outputContainer:GetChildren())do if c:IsA("Frame")and(c.Name=="LogEntryContainer"or c.Name=="CategoryHeader"or c.Name=="TempStatusLabel")then c:Destroy()end end; outputContainer.CanvasSize=UDim2.new(0,0,0,0); logOutputWrapper("UI","ล้าง Log ในหน้าต่างแล้ว")end)
+    rescanBtn.MouseButton1Click:Connect(function() logOutputWrapper("System","กำลังสแกนเป้าหมายอีกครั้ง..."); task.spawn(executeFocusedScanSequence) end)
+    
+    originalMainFramePosition = UDim2.new(0.5,0,0.5,0); TweenService:Create(mainFrame,TweenInfo.new(0.5,Enum.EasingStyle.Elastic,Enum.EasingDirection.Out),{Size=originalMainFrameSize,Position=originalMainFramePosition}):Play()
+    if not INITIAL_UI_VISIBLE then task.wait(0.5); toggleContentVisibility() end
+end
+
+local function addLogEntryToUI(category,originalMessage,encryptedMessage,encryptionTag) if not(SHOW_UI_OUTPUT and mainFrame and outputContainer)then return end;local timestamp=os.date("[%H:%M:%S] ");local entryContainer=Instance.new("Frame",outputContainer);entryContainer.Name="LogEntryContainer";entryContainer.BackgroundTransparency=1;entryContainer.Size=UDim2.new(1,-6,0,0);entryContainer.AutomaticSize=Enum.AutomaticSize.Y;entryContainer.LayoutOrder=#outputContainer:GetChildren();local logEntryLabel=Instance.new("TextLabel",entryContainer);logEntryLabel.Name="LogEntryLabel";logEntryLabel.Text="<b>"..timestamp.."["..category.."]</b> "..encryptionTag..encryptedMessage;logEntryLabel.RichText=true;logEntryLabel.TextColor3=THEME_COLORS.Text;logEntryLabel.Font=Enum.Font.Code;logEntryLabel.TextSize=13;logEntryLabel.TextXAlignment=Enum.TextXAlignment.Left;logEntryLabel.TextWrapped=true;logEntryLabel.Size=UDim2.new(0.82,-5,0,0);logEntryLabel.Position=UDim2.new(0,0,0,0);logEntryLabel.AutomaticSize=Enum.AutomaticSize.Y;logEntryLabel.BackgroundColor3=THEME_COLORS.Primary;logEntryLabel.BackgroundTransparency=0.6;local lc=Instance.new("UICorner",logEntryLabel);lc.CornerRadius=UDim.new(0,3);local cb=createStyledButton(entryContainer,"COPY",UDim2.new(0.15,0,0,20),UDim2.new(0.84,0,0,0),THEME_COLORS.Secondary,THEME_COLORS.Accent);cb.TextSize=11;cb.ZIndex=3;task.wait();local lh=logEntryLabel.AbsoluteSize.Y;entryContainer.Size=UDim2.new(1,-6,0,math.max(22,lh+2));cb.Size=UDim2.new(0.15,0,0,math.max(18,lh));cb.Position=UDim2.new(0.84,0,0.5,-cb.AbsoluteSize.Y/2);cb.MouseButton1Click:Connect(function()if copyToClipboard(originalMessage)then cb.Text="OK";cb.TextColor3=Color3.fromRGB(0,255,0)else cb.Text="ERR";cb.TextColor3=Color3.fromRGB(255,80,80)end;task.wait(1);cb.Text="COPY";cb.TextColor3=THEME_COLORS.Accent end);local th=5;for _,c in ipairs(outputContainer:GetChildren())do if c:IsA("Frame")and(c.Name=="LogEntryContainer"or c.Name=="CategoryHeader"or c.Name=="TempStatusLabel")then th=th+c.AbsoluteSize.Y+outputContainer.UIListLayout.Padding.Offset end end;outputContainer.CanvasSize=UDim2.new(0,0,0,th);if outputContainer.CanvasSize.Y.Offset>outputContainer.AbsoluteSize.Y then outputContainer.CanvasPosition=Vector2.new(0,outputContainer.CanvasSize.Y.Offset-outputContainer.AbsoluteSize.Y)end end
+local function addCategoryHeaderToUI(categoryName)if not(SHOW_UI_OUTPUT and mainFrame and outputContainer)then return end;local h=Instance.new("Frame",outputContainer);h.Name="CategoryHeader";h.Size=UDim2.new(1,-6,0,25);h.BackgroundColor3=THEME_COLORS.Secondary;h.LayoutOrder=#outputContainer:GetChildren();local co=Instance.new("UICorner",h);co.CornerRadius=UDim.new(0,3);local t=Instance.new("TextLabel",h);t.Size=UDim2.new(1,-10,1,0);t.Position=UDim2.new(0,5,0,0);t.BackgroundTransparency=1;t.Font=Enum.Font.Michroma;t.Text="SCANNING: "..categoryName;t.TextColor3=THEME_COLORS.Accent;t.TextSize=15;t.TextXAlignment=Enum.TextXAlignment.Left;task.wait();local th=5;for _,c in ipairs(outputContainer:GetChildren())do if c:IsA("Frame")and(c.Name=="LogEntryContainer"or c.Name=="CategoryHeader"or c.Name=="TempStatusLabel")then th=th+c.AbsoluteSize.Y+outputContainer.UIListLayout.Padding.Offset end end;outputContainer.CanvasSize=UDim2.new(0,0,0,th)end
+local function logOutputWrapper(category,message)local timestamp=os.date("[%H:%M:%S] ");local originalMessage=message;local fullMessageForConsole=timestamp.."["..category.."] "..originalMessage;print(fullMessageForConsole);table.insert(allLoggedMessages,fullMessageForConsole);local encryptedMessage=originalMessage;local encryptionTag="";if UI_OUTPUT_ENCRYPTION_METHOD=="Hex"then local hex="";for i=1,#originalMessage do hex=hex..string.format("%02x",string.byte(originalMessage,i))end;encryptedMessage=hex;encryptionTag="[HEX] "elseif UI_OUTPUT_ENCRYPTION_METHOD=="Base64"then if HttpService and HttpService.EncodeBase64 then encryptedMessage=HttpService:EncodeBase64(originalMessage);encryptionTag="[B64] "else encryptedMessage=originalMessage;encryptionTag="[B64-Fail] "end end;if SHOW_UI_OUTPUT and mainFrame and outputContainer then addLogEntryToUI(category,originalMessage,encryptedMessage,encryptionTag)end end
+
+local function updateStatus(text, overallPercentage)
+    if SHOW_UI_OUTPUT and statusTextLabel and statusTextLabel.Parent then
+        local currentText = "Status: " .. text
+        if overallPercentage then currentText = currentText .. string.format(" (Overall: %.0f%%)", overallPercentage) end
+        statusTextLabel.Text = currentText
     end
+    print("[StatusUpdate] " .. text .. (overallPercentage and string.format(" (Overall: %.0f%%)", overallPercentage) or ""))
+end
 
-    if MAKE_INVISIBLE_DURING_ROB then setPlayerVisibility(false) end
-
-    for i, heistName in ipairs(TARGET_HEISTS_TO_ROB_SEQUENCE) do
-        if not currentRobberyCoroutine then logOutputWrapper("RobCtrl","การปล้นทั้งหมดถูกยกเลิก"); break end
-        if not (Character and Humanoid and Humanoid.Health > 0) then logOutputWrapper("RobCtrl","ตัวละครตาย, หยุดการปล้นทั้งหมด"); break end
-        
-        local heistConfig = HEIST_SPECIFIC_CONFIG[heistName]
-        if heistConfig then
-            logOutputWrapper("Sequence", string.format("เริ่มปล้น: %s (%d/%d)", heistConfig.DisplayName or heistName, i, #TARGET_HEISTS_TO_ROB_SEQUENCE))
-            if not executeFullHeistRobbery(heistName) then
-                logOutputWrapper("SequenceError", string.format("การปล้น %s ล้มเหลวหรือถูกขัดจังหวะ.", heistConfig.DisplayName or heistName))
-                if AutoHeistSettings.stopOnErrorInSequence then logOutputWrapper("RobCtrl","หยุดการปล้นทั้งหมดเนื่องจาก Heist ก่อนหน้าล้มเหลว."); break end
-            end
-        else logOutputWrapper("SequenceWarning", "ไม่พบ Config สำหรับ Heist key: " .. heistName) end
-        
-        if i < #TARGET_HEISTS_TO_ROB_SEQUENCE and currentRobberyCoroutine then
-            local waitTime = AutoHeistSettings.delayAfterHeistCompletion
-            updateStatus(string.format("รอ %.1fวินาที ก่อนปล้นที่ต่อไป...", waitTime))
-            local waited = 0; while waited < waitTime and currentRobberyCoroutine do task.wait(0.1); waited = waited + 0.1 end
+function exploreFocusedPath(rootInstance, rootNameForLog, currentScanIndex, totalScanTasks)
+    updateStatus("กำลังสำรวจ: " .. rootNameForLog, (currentScanIndex / totalScanTasks) * 100)
+    if SHOW_UI_OUTPUT and mainFrame and outputContainer and not outputContainer:FindFirstChild("CategoryHeader_"..rootNameForLog:gsub("[^%w]","")) then
+        addCategoryHeaderToUI(rootNameForLog)
+    end
+    local foundItems = {}; local descendants = rootInstance:GetDescendants(); local numDescendants = #descendants; local updateInterval = math.max(1, math.floor(numDescendants / 15))
+    for i, descendant in ipairs(descendants) do
+        local itemPath = descendant:GetFullName()
+        if not foundItems[itemPath] then local loggedThisItem = false
+            if descendant:IsA("LuaSourceContainer") then local sCP=""; if descendant:IsA("Script")or descendant:IsA("LocalScript")then local s,sr=pcall(function()return descendant.Source end);if s and sr and #sr>0 then sCP="|Code";for _,k in ipairs(SENSITIVE_SCRIPT_KEYWORDS)do if sr:lower():match(k)then sCP=sCP.." [K:"..k.."]";break end end else sCP="|SrcFail/Empty"end end;logOutputWrapper("ScriptFound","Path: "..itemPath.." |T: "..descendant.ClassName..sCP);loggedThisItem=true end
+            if descendant:IsA("RemoteEvent")or descendant:IsA("RemoteFunction")then logOutputWrapper("RemoteFound","Path: "..itemPath.." |T: "..descendant.ClassName);loggedThisItem=true end
+            if descendant:IsA("ProximityPrompt")then logOutputWrapper("ProximityPromptFound","Path: "..itemPath.." |Obj:"..(descendant.ObjectText or"-").." |Act:"..(descendant.ActionText or"-").." |Hold:"..tostring(descendant.HoldDuration).." |Dist:"..string.format("%.1f",descendant.MaxActivationDistance).." |En:"..tostring(descendant.Enabled));loggedThisItem=true end
+            if descendant:IsA("BasePart")and not descendant:IsA("Terrain")then local pI="";local iLP=false;for _,k in ipairs(MINI_ROBBERIES_NAMES_EXTENDED)do if descendant.Name:lower():match(k:lower())then iLP=true;pI=pI.."[K:"..k.."]";break end end;if not iLP then for _,k in ipairs(EXTRA_LOOT_KEYWORDS)do if descendant.Name:lower():match(k:lower())then iLP=true;pI=pI.."[K:"..k.."]";break end end end;if iLP then logOutputWrapper("PotentialLootPart","Path: "..itemPath.." "..pI.." |Pos: "..string.format("%.1f,%.1f,%.1f",descendant.Position.X,descendant.Position.Y,descendant.Position.Z));loggedThisItem=true end;if descendant:FindFirstChildOfClass("TouchTransmitter")then logOutputWrapper("PartWithTouch","Path: "..itemPath.." (Touch)");loggedThisItem=true end;local p=descendant.Parent;if p then for _,cs in ipairs(p:GetChildren())do if cs:IsA("LuaSourceContainer")and(cs.Name:lower():match("touch")or cs.Name:lower():match("interact")or cs.Name:lower():match("click"))then logOutputWrapper("PartAssociatedScript","Part: "..itemPath.." |Scr: "..cs:GetFullName());loggedThisItem=true;break end end end end
+            if loggedThisItem then foundItems[itemPath]=true end
         end
+        if i % updateInterval == 0 then updateStatus("สแกน "..rootNameForLog..string.format(" (%.0f%%)",(i/numDescendants)*100), (currentScanIndex/totalScanTasks)*100+((i/numDescendants)*(1/totalScanTasks)*100) ); task.wait() end
     end
-    
-    if MAKE_INVISIBLE_DURING_ROB then setPlayerVisibility(true) end
-    if currentRobberyCoroutine then 
-        updateStatus(string.format("ลำดับการปล้นทั้งหมดเสร็จสิ้น (%.2fวิ). กำลังย้ายเซิร์ฟเวอร์...", tick() - startTime))
-        logOutputWrapper("System", string.format("ลำดับการปล้นทั้งหมดเสร็จสิ้นใน %.2f วินาที. กำลังเริ่ม Server Hop.", tick() - startTime))
-        ServerHop()
-    end
-    isRobbingGlobally = false; currentRobberyCoroutine = nil
+    updateStatus("สำรวจเสร็จสิ้น: "..rootNameForLog, (currentScanIndex / totalScanTasks) * 100)
 end
 
-task.spawn(function() while true do if mainFrame and mainFrame.Parent and timerTextLabel and startTime then timerTextLabel.Text = string.format("เวลา: %.1fs", tick() - startTime) elseif timerTextLabel then timerTextLabel.Text = "เวลา: --.-s" end; task.wait(0.1) end end)
+local function executeFocusedScanSequence()
+    startTime = tick()
+    if SHOW_UI_OUTPUT and outputContainer then local children = outputContainer:GetChildren();for i = #children, 1, -1 do local child = children[i];if child.Name == "LogEntryContainer" or child.Name == "CategoryHeader" or child.Name == "TempStatusLabel" then child:Destroy() end end;allLoggedMessages = {};outputContainer.CanvasSize = UDim2.new(0,0,0,0)end
+    logOutputWrapper("System", "RyntazHub Explorer V2.6.3 Initialized & Focused Scanning...")
+    local pathsToScanConfig = {}
+    local heistsFolder = Workspace:FindFirstChild(HEISTS_BASE_PATH_STRING)
+    if heistsFolder then if #TARGET_HEISTS_IN_WORKSPACE > 0 then for _, heistName in ipairs(TARGET_HEISTS_IN_WORKSPACE) do local specificHeistFolder = heistsFolder:FindFirstChild(heistName); if specificHeistFolder then table.insert(pathsToScanConfig, {instance = specificHeistFolder, name = specificHeistFolder:GetFullName()}) else logOutputWrapper("Error", "ไม่พบ Folder Heist: " .. heistName .. " ใน " .. heistsFolder:GetFullName()) end end else logOutputWrapper("Info", "ไม่ได้ระบุ TARGET_HEISTS_IN_WORKSPACE, สแกน Children ของ " .. heistsFolder:GetFullName()); for _, childHeist in ipairs(heistsFolder:GetChildren()) do if childHeist:IsA("Instance") then table.insert(pathsToScanConfig, {instance = childHeist, name = childHeist:GetFullName()}) end end end else logOutputWrapper("Error", "ไม่พบ Folder Heists หลัก: '" .. HEISTS_BASE_PATH_STRING .. "' ใน Workspace.") end
+    if ReplicatedStorage then table.insert(pathsToScanConfig, {instance = ReplicatedStorage, name = "ReplicatedStorage"}) end
+    local totalScanTasks = #pathsToScanConfig
+    if totalScanTasks == 0 then updateStatus("ไม่พบ Path ที่จะสแกน", 100); logOutputWrapper("System", "Focused scan finished (No paths)."); return end
+    for i, scanTask in ipairs(pathsToScanConfig) do exploreFocusedPath(scanTask.instance, scanTask.name, i, totalScanTasks); if i < totalScanTasks then task.wait(0.05) end end
+    updateStatus("การสำรวจ (Focused) ทั้งหมดเสร็จสิ้น.", 100); logOutputWrapper("System", string.format("การสำรวจ (Focused) ทั้งหมดเสร็จสิ้นใน %.2f วินาที.", tick() - startTime))
+end
 
-if waitForCharacter() then
-    local successUI, errUI = pcall(createControlUI_V6)
-    if not successUI then printDebug("ERROR creating Control UI: " .. tostring(errUI)) end
-    
-    local autoStartRobbery = false -- <<<< เปลี่ยนเป็น false เพื่อให้กดปุ่มเอง
-    if autoStartRobbery then
-        printDebug("[AutoRob V6.0.1] Auto-start. Waiting 3s...")
-        task.wait(3)
-        if not isRobbingGlobally then task.spawn(executeAllRobberiesAndHop) end
-    else
-        printDebug("[AutoRob V6.0.1] Auto-start ปิดอยู่. คลิกปุ่ม 'เริ่มปล้นทั้งหมด'.")
-        updateStatus("พร้อม, รอคำสั่ง")
-    end
+task.spawn(function() while true do if SHOW_UI_OUTPUT and mainFrame and mainFrame.Parent and timerTextLabel then if startTime then timerTextLabel.Text = string.format("Time: %.1fs", tick() - startTime) else timerTextLabel.Text = "Time: --.-s" end end; task.wait(0.1) end end)
+
+if SHOW_UI_OUTPUT then
+    local uiSuccess, uiErr = pcall(createMainUI)
+    if not uiSuccess then print("FATAL ERROR creating UI: "..tostring(uiErr)) end
 else
-    printDebug("[AutoRob V6.0.1] Script terminated: Character not loaded.")
+    print("SHOW_UI_OUTPUT is false, no UI will be created.")
 end
 
-_G.RyntazHubRob = {
-    Start = executeAllRobberiesAndHop,
-    Stop = function() if currentRobberyCoroutine then isRobbingGlobally=false;task.cancel(currentRobberyCoroutine);currentRobberyCoroutine=nil;printDebug("[RyntazHubRob.Stop] Stopped.");updateStatus("หยุดโดยผู้ใช้");if MAKE_INVISIBLE_DURING_ROB then setPlayerVisibility(true) end else printDebug("[RyntazHubRob.Stop] Nothing to stop.")end end,
-    SetInvisible = function(state) setPlayerVisibility(not state) end,
-    TeleportToHeistEntry = function(heistNameKey) local config=HEIST_SPECIFIC_CONFIG[heistNameKey];if config and config.EntryTeleportCFrame and RootPart then teleportTo(config.EntryTeleportCFrame,heistNameKey.." Entry")else printDebug("Cannot teleport to entry for: "..tostring(heistNameKey))end end
-}
-printDebug("[RyntazHub V6.0.1] Loaded. Use _G.RyntazHubRob.Start() or UI button.")
+task.spawn(function()
+    task.wait(0.2) 
+    local scanSuccess, scanErr = pcall(executeFocusedScanSequence)
+    if not scanSuccess then logOutputWrapper("SystemError", "Scan Error: " .. tostring(scanErr)); if statusTextLabel and statusTextLabel.Parent then statusTextLabel.Text = "สถานะ: Scan Error!" end
+    else logOutputWrapper("System", "สแกน (Focused) เสร็จสิ้น.") end
+end)
